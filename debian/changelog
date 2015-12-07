@@ -1,0 +1,17 @@
+jube (2.1.0-2+c9+1) calibre9; urgency=medium
+
+  * Backport to Calibre9
+
+ -- Rémi Palancher <remi-externe.palancher@edf.fr>  Mon, 07 Dec 2015 11:09:31 +0100
+
+jube (2.1.0-2) unstable; urgency=medium
+
+  * Add manpages for jube and jube-autorun
+
+ -- Rémi Palancher <remi-externe.palancher@edf.fr>  Mon, 07 Dec 2015 10:57:02 +0100
+
+jube (2.1.0-1) unstable; urgency=low
+
+  * Initial release
+
+ -- Rémi Palancher <remi-externe.palancher@edf.fr>  Fri, 4 Dec 2015 13:35:04 +0200
