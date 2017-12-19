@@ -1,3 +1,9 @@
+jube (2.1.0-2sci8u1) scibian8; urgency=medium
+
+  * Adapt packaging for Scibian
+
+ -- Pierre Trespeuch <pierre-externe.trespeuch@edf.fr>  Tue, 19 Dec 2017 14:23:28 +0100
+
 jube (2.1.0-2+c9+1) calibre9; urgency=medium
 
   * Backport to Calibre9
