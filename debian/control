@@ -1,15 +1,17 @@
 Source: jube
 Section: net
 Priority: optional
-Maintainer: Rémi Palancher <remi-externe.palancher@edf.fr>
-Homepage: http://www.fz-juelich.de/ias/jsc/EN/Expertise/Support/Software/JUBE/_node.html
+Maintainer: Project <packaging@scibian.org>
 Build-Depends:
- debhelper (>= 8),
+ debhelper (>= 9),
  python-all (>= 2.6.6-3~),
  python-setuptools,
  dh-python
 X-Python-Version: >= 2.6
 Standards-Version: 3.9.6
+Vcs-Browser: https://github.com/scibian/jube
+Vcs-Git: https://github.com/scibian/jube.git
+Homepage: http://www.fz-juelich.de/ias/jsc/EN/Expertise/Support/Software/JUBE/_node.html
 
 Package: jube
 Architecture: all

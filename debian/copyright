@@ -22,7 +22,9 @@ License: GPL-3+
  Public License version 3 can be found in "/usr/share/common-licenses/GPL-3".
 
 Files: debian/*
-Copyright: 2015 Rémi Palancher <remi-externe.palancher@edf.fr>
+Copyright:
+  2015 Rémi Palancher <remi-externe.palancher@edf.fr>
+  2017 Project <legal@scibian.org>
 License: GPL-3+
  This package is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
