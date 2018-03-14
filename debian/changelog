@@ -1,3 +1,9 @@
+jube (2.2.0-0sci8u1) scibian8; urgency=medium
+
+  * Imported Upstream version 2.2.0
+
+ -- Pierre Trespeuch <pierre-externe.trespeuch@edf.fr>  Wed, 14 Mar 2018 10:29:29 +0100
+
 jube (2.1.0-2sci8u1) scibian8; urgency=medium
 
   * Adapt packaging for Scibian

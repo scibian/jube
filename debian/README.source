@@ -3,4 +3,4 @@ Manpages
 
 To update manpage run:
 
-$ make -f debian/rules debian/jube.1
+$ PATH=<jube_path>/bin:$PATH PYTHONPATH=<jube_path>/jube2:$PYTHONPATH make -f debian/rules debian/jube.1 debian/jube-autorun.1
