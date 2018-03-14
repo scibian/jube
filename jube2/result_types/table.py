@@ -1,5 +1,5 @@
 # JUBE Benchmarking Environment
-# Copyright (C) 2008-2015
+# Copyright (C) 2008-2017
 # Forschungszentrum Juelich GmbH, Juelich Supercomputing Centre
 # http://www.fz-juelich.de/jsc/jube
 #
@@ -25,6 +25,7 @@ from jube2.result_types.keyvaluesresult import KeyValuesResult
 from jube2.result import Result
 import xml.etree.ElementTree as ET
 import jube2.log
+import jube2.util.output
 
 LOGGER = jube2.log.get_logger(__name__)
 
@@ -47,6 +48,11 @@ class Table(KeyValuesResult):
                 KeyValuesResult.KeyValuesData.__init__(self, name_or_other)
             self._style = style
             self._separator = separator
+            # Ignore separator if pretty style is used
+            if self._style == "pretty":
+                self._separator = None
+            elif self._separator is None:
+                self._separator = jube2.conf.DEFAULT_SEPARATOR
             self._transpose = transpose
 
         @property
@@ -91,7 +97,7 @@ class Table(KeyValuesResult):
                 output = "{0}:\n".format(self.name)
             else:
                 output = ""
-            output += jube2.util.text_table(
+            output += jube2.util.output.text_table(
                 data, use_header_line=True, auto_linebreak=False, colw=colw,
                 indent=0, pretty=(self._style == "pretty"),
                 separator=self._separator, transpose=self._transpose)
@@ -125,9 +131,9 @@ class Table(KeyValuesResult):
         """Class represents one table column"""
 
         def __init__(self, name, title=None, colw=None, format_string=None,
-                     null_value="", unit=None):
+                     unit=None):
             KeyValuesResult.DataKey.__init__(self, name, title, format_string,
-                                             null_value, unit)
+                                             unit)
             self._colw = colw
 
         @property
@@ -146,23 +152,20 @@ class Table(KeyValuesResult):
     def __init__(self, name, style="csv",
                  separator=jube2.conf.DEFAULT_SEPARATOR,
                  sort_names=None,
-                 transpose=False):
-        KeyValuesResult.__init__(self, name, sort_names)
+                 transpose=False,
+                 res_filter=None):
+        KeyValuesResult.__init__(self, name, sort_names, res_filter)
         self._style = style
         self._separator = separator
         self._transpose = transpose
 
-    def add_column(self, name, colw=None, format_string=None, title=None,
-                   null_value=""):
+    def add_column(self, name, colw=None, format_string=None, title=None):
         """Add an additional column to the dataset"""
-        self._keys.append(Table.Column(name, title, colw, format_string,
-                                       null_value))
+        self._keys.append(Table.Column(name, title, colw, format_string))
 
-    def add_key(self, name, format_string=None, title=None, null_value="",
-                unit=None):
+    def add_key(self, name, format_string=None, title=None, unit=None):
         """Add an additional key to the dataset"""
-        self._keys.append(Table.Column(name, title, None, format_string,
-                                       null_value))
+        self._keys.append(Table.Column(name, title, None, format_string))
 
     def create_result_data(self):
         """Create result data"""
@@ -176,7 +179,10 @@ class Table(KeyValuesResult):
         table_etree = ET.SubElement(result_etree, "table")
         table_etree.attrib["name"] = self._name
         table_etree.attrib["style"] = self._style
-        table_etree.attrib["separator"] = self._separator
+        if self._separator is not None:
+            table_etree.attrib["separator"] = self._separator
+        if self._res_filter is not None:
+            table_etree.attrib["filter"] = self._res_filter
         table_etree.attrib["transpose"] = str(self._transpose)
         if len(self._sort_names) > 0:
             table_etree.attrib["sort"] = \

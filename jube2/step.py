@@ -1,5 +1,5 @@
 # JUBE Benchmarking Environment
-# Copyright (C) 2008-2015
+# Copyright (C) 2008-2017
 # Forschungszentrum Juelich GmbH, Juelich Supercomputing Centre
 # http://www.fz-juelich.de/jsc/jube
 #
@@ -26,7 +26,7 @@ import os
 import re
 import time
 import xml.etree.ElementTree as ET
-import jube2.util
+import jube2.util.util
 import jube2.conf
 import jube2.log
 
@@ -41,7 +41,8 @@ class Step(object):
     """
 
     def __init__(self, name, depend, iterations=1, alt_work_dir=None,
-                 shared_name=None, export=False, max_wps="0"):
+                 shared_name=None, export=False, max_wps="0",
+                 active="true", suffix="", cycles=1):
         self._name = name
         self._use = list()
         self._operations = list()
@@ -51,6 +52,9 @@ class Step(object):
         self._shared_name = shared_name
         self._export = export
         self._max_wps = max_wps
+        self._active = active
+        self._suffix = suffix
+        self._cycles = cycles
 
     def etree_repr(self):
         """Return etree object representation"""
@@ -63,12 +67,18 @@ class Step(object):
             step_etree.attrib["work_dir"] = self._alt_work_dir
         if self._shared_name is not None:
             step_etree.attrib["shared"] = self._shared_name
+        if self._active != "true":
+            step_etree.attrib["active"] = self._active
+        if self._suffix != "":
+            step_etree.attrib["suffix"] = self._suffix
         if self._export:
             step_etree.attrib["export"] = "true"
         if self._max_wps != "0":
             step_etree.attrib["max_async"] = self._max_wps
         if self._iterations > 1:
             step_etree.attrib["iterations"] = str(self._iterations)
+        if self._cycles > 1:
+            step_etree.attrib["cycles"] = str(self._cycles)
         for use in self._use:
             use_etree = ET.SubElement(step_etree, "use")
             use_etree.text = jube2.conf.DEFAULT_SEPARATOR.join(use)
@@ -87,7 +97,7 @@ class Step(object):
         """Add use"""
         for use_name in use_names:
             if any([use_name in use_list for use_list in self._use]):
-                raise ValueError(("Can't use element \"{0}\" two times")
+                raise ValueError(("Element \"{0}\" can only be used once")
                                  .format(use_name))
         self._use.append(use_names)
 
@@ -95,6 +105,11 @@ class Step(object):
     def name(self):
         """Return step name"""
         return self._name
+
+    @property
+    def active(self):
+        """Return active state"""
+        return self._active
 
     @property
     def export(self):
@@ -105,6 +120,11 @@ class Step(object):
     def iterations(self):
         """Return iterations"""
         return self._iterations
+
+    @property
+    def cycles(self):
+        """Return number of cycles"""
+        return self._cycles
 
     @property
     def shared_link_name(self):
@@ -123,7 +143,7 @@ class Step(object):
             parameter_dict = dict()
         for use in self._use:
             for name in use:
-                name = jube2.util.substitution(name, parameter_dict)
+                name = jube2.util.util.substitution(name, parameter_dict)
                 if (name in available_sets) and (name not in set_names):
                     set_names.append(name)
         return set_names
@@ -132,8 +152,8 @@ class Step(object):
         """Return shared folder name"""
         if self._shared_name is not None:
             if parameter_dict is not None:
-                shared_name = jube2.util.substitution(self._shared_name,
-                                                      parameter_dict)
+                shared_name = jube2.util.util.substitution(self._shared_name,
+                                                           parameter_dict)
             else:
                 shared_name = self._shared_name
             return os.path.join(benchdir,
@@ -149,31 +169,62 @@ class Step(object):
         # step name
         parameterset.add_parameter(
             jube2.parameter.Parameter.
-            create_parameter("jube_step_name", self._name))
+            create_parameter("jube_step_name", self._name,
+                             update_mode=jube2.parameter.JUBE_MODE))
 
         # iterations
         parameterset.add_parameter(
             jube2.parameter.Parameter.
             create_parameter("jube_step_iterations", str(self._iterations),
-                             parameter_type="int"))
+                             parameter_type="int",
+                             update_mode=jube2.parameter.JUBE_MODE))
+
+        # cycles
+        parameterset.add_parameter(
+            jube2.parameter.Parameter.
+            create_parameter("jube_step_cycles", str(self._cycles),
+                             parameter_type="int",
+                             update_mode=jube2.parameter.JUBE_MODE))
+
+        # default worpackage cycle, will be overwritten by specific worpackage
+        # cycle
+        parameterset.add_parameter(
+            jube2.parameter.Parameter.
+            create_parameter("jube_wp_cycle", "0", parameter_type="int",
+                             update_mode=jube2.parameter.JUBE_MODE))
 
         return parameterset
 
-    def create_workpackages(self, benchmark, local_parameterset,
-                            history_parameterset, used_sets=None,
-                            iteration_base=0):
+    def create_workpackages(self, benchmark, global_parameterset,
+                            local_parameterset=None, used_sets=None,
+                            iteration_base=0, parents=None,
+                            incompatible_parameters=None):
         """Create workpackages for current step using given
         benchmark context"""
-
         if used_sets is None:
             used_sets = set()
+
+        update_parameters = jube2.parameter.Parameterset()
+        if local_parameterset is None:
+            local_parameterset = jube2.parameter.Parameterset()
+            global_parameterset.add_parameterset(
+                benchmark.get_jube_parameterset())
+            global_parameterset.add_parameterset(self.get_jube_parameterset())
+            update_parameters.add_parameterset(
+                global_parameterset.get_updatable_parameter(
+                    jube2.parameter.STEP_MODE))
+            for parameter in update_parameters:
+                incompatible_parameters.discard(parameter.name)
+
+        if parents is None:
+            parents = list()
 
         new_workpackages = list()
 
         # Create parameter dictionary for substitution
         parameter_dict = \
             dict([[par.name, par.value] for par in
-                  history_parameterset.constant_parameter_dict.values()])
+                  global_parameterset.constant_parameter_dict.values()])
 
         # Filter for parametersets in uses
         parameterset_names = \
@@ -191,7 +242,7 @@ class Step(object):
                     incompatible_names = \
                         local_parameterset.get_incompatible_parameter(
                             benchmark.parametersets[parameterset_name])
-                    raise ValueError(("Can't use parameterset '{0}' in " +
+                    raise ValueError(("Cannot use parameterset '{0}' in " +
                                       "step '{1}'.\nParameter '{2}' is/are " +
                                       "already defined by a different " +
                                       "parameterset.")
@@ -201,30 +252,44 @@ class Step(object):
                     benchmark.parametersets[parameterset_name])
 
             # Combine local and history parameterset
-            if local_parameterset.is_compatible(history_parameterset):
-                history_parameterset = \
+            if local_parameterset.is_compatible(
+                    global_parameterset, update_mode=jube2.parameter.USE_MODE):
+                update_parameters.add_parameterset(
+                    local_parameterset.get_updatable_parameter(
+                        jube2.parameter.USE_MODE))
+                for parameter in update_parameters:
+                    incompatible_parameters.discard(parameter.name)
+                global_parameterset = \
                     local_parameterset.copy().add_parameterset(
-                        history_parameterset)
+                        global_parameterset)
             else:
+                incompatible_names = \
+                    local_parameterset.get_incompatible_parameter(
+                        global_parameterset,
+                        update_mode=jube2.parameter.USE_MODE)
                 LOGGER.debug("Incompatible parameterset combination found " +
-                             "between current and parent steps.")
+                             "between current and parent steps. \nParameter " +
+                             "'{0}' is/are already defined different.".format(
+                                 ",".join(incompatible_names)))
                 return new_workpackages
 
-        # Get jube internal parametersets
-        jube_parameterset = benchmark.get_jube_parameterset()
-        jube_parameterset.add_parameterset(self.get_jube_parameterset())
+        # update parameters
+        global_parameterset.update_parameterset(update_parameters)
 
         # Expand templates
-        parametersets = [history_parameterset]
+        parametersets = [global_parameterset]
         change = True
         while change:
             change = False
             new_parametersets = list()
             for parameterset in parametersets:
-                parameterset.parameter_substitution(
-                    additional_parametersets=[jube_parameterset])
+                parameterset.parameter_substitution()
                 # Maybe new templates were created
                 if parameterset.has_templates:
+                    LOGGER.debug("Expand parameter templates:\n{0}".format(
+                        "\n".join("    \"{0}\": {1}".format(i, j.value)
+                                  for i, j in parameterset.
+                                  template_parameter_dict.items())))
                     new_parametersets += \
                         [new_parameterset for new_parameterset in
                          parameterset.expand_templates()]
@@ -239,40 +304,53 @@ class Step(object):
             workpackage_parameterset.update_parameterset(parameterset)
             if new_sets_found:
                 new_workpackages += \
-                    self.create_workpackages(benchmark,
+                    self.create_workpackages(benchmark, parameterset,
                                              workpackage_parameterset,
-                                             parameterset, used_sets,
-                                             iteration_base)
+                                             used_sets, iteration_base,
+                                             parents,
+                                             incompatible_parameters.copy())
             else:
+                # Check if all incompatible_parameters were updated
+                if len(incompatible_parameters) > 0:
+                    return new_workpackages
                 # Create new workpackage
                 created_workpackages = list()
                 for iteration in range(self.iterations):
                     workpackage = jube2.workpackage.Workpackage(
                         benchmark=benchmark,
                         step=self,
-                        parameterset=workpackage_parameterset,
-                        history=parameterset.copy(),
-                        iteration=iteration_base * self.iterations + iteration)
+                        parameterset=parameterset.copy(),
+                        local_parameter_names=[
+                            par.name for par in workpackage_parameterset],
+                        iteration=iteration_base * self.iterations + iteration,
+                        cycle=0)
+
+                    # --- Link parent workpackages ---
+                    for parent in parents:
+                        workpackage.add_parent(parent)
+
+                    # --- Add workpackage JUBE parameterset ---
+                    workpackage.parameterset.add_parameterset(
+                        workpackage.get_jube_parameterset())
 
                     # --- Final parameter substitution ---
                     workpackage.parameterset.parameter_substitution(
-                        additional_parametersets=[
-                            jube_parameterset,
-                            workpackage.get_jube_parameterset(
-                                substitute=False)],
                         final_sub=True)
 
                     # --- Check parameter type ---
                     for parameter in workpackage.parameterset:
                         if not parameter.is_template:
-                            jube2.util.convert_type(
+                            jube2.util.util.convert_type(
                                 parameter.parameter_type, parameter.value)
 
-                    # Update workpackage history parameterset
-                    workpackage.history.update_parameterset(
-                        workpackage.parameterset)
+                    # --- Enable workpackage dir cache ---
+                    workpackage.allow_workpackage_dir_caching()
 
-                    created_workpackages.append(workpackage)
+                    if workpackage.active:
+                        created_workpackages.append(workpackage)
+                    else:
+                        jube2.workpackage.Workpackage.\
+                            reduce_workpackage_id_counter()
 
                 for workpackage in created_workpackages:
                     workpackage.iteration_siblings.update(
@@ -291,6 +369,11 @@ class Step(object):
     def use(self):
         """Return parameters and substitutions"""
         return self._use
+
+    @property
+    def suffix(self):
+        """Return directory suffix"""
+        return self._suffix
 
     @property
     def operations(self):
@@ -322,9 +405,10 @@ class Operation(object):
 
     def __init__(self, do, async_filename=None, stdout_filename=None,
                  stderr_filename=None, active="true", shared=False,
-                 work_dir=None):
+                 work_dir=None, break_filename=None):
         self._do = do
         self._async_filename = async_filename
+        self._break_filename = break_filename
         self._stdout_filename = stdout_filename
         self._stderr_filename = stderr_filename
         self._active = active
@@ -342,9 +426,20 @@ class Operation(object):
         return self._stderr_filename
 
     @property
+    def async_filename(self):
+        """Get async filename"""
+        return self._async_filename
+
+    @property
     def shared(self):
         """Shared operation?"""
         return self._shared
+
+    def active(self, parameter_dict):
+        """Return active status of the current operation depending on the
+        given parameter_dict"""
+        active_str = jube2.util.util.substitution(self._active, parameter_dict)
+        return jube2.util.util.eval_bool(active_str)
 
     def execute(self, parameter_dict, work_dir, only_check_pending=False,
                 environment=None):
@@ -356,12 +451,8 @@ class Operation(object):
         True => operation finished
         False => operation pending
         """
-        active = jube2.util.substitution(self._active, parameter_dict)
-        if active.lower() == "false":
+        if not self.active(parameter_dict):
             return True
-        elif active.lower() != "true":
-            raise RuntimeError(("<do active=\"{0}\"> not allowed. Must be " +
-                                "true or false").format(active.lower()))
 
         if environment is not None:
             env = environment
@@ -370,7 +461,7 @@ class Operation(object):
 
         if not only_check_pending:
             # Inline substitution
-            do = jube2.util.substitution(self._do, parameter_dict)
+            do = jube2.util.util.substitution(self._do, parameter_dict)
 
             # Remove leading and trailing ; because otherwise ;; will cause
             # trouble when adding ; env
@@ -379,7 +470,7 @@ class Operation(object):
             if (not jube2.conf.DEBUG_MODE) and (do.strip() != ""):
                 # Change stdout
                 if self._stdout_filename is not None:
-                    stdout_filename = jube2.util.substitution(
+                    stdout_filename = jube2.util.util.substitution(
                         self._stdout_filename, parameter_dict)
                     stdout_filename = \
                         os.path.expandvars(os.path.expanduser(stdout_filename))
@@ -390,7 +481,7 @@ class Operation(object):
 
                 # Change stderr
                 if self._stderr_filename is not None:
-                    stderr_filename = jube2.util.substitution(
+                    stderr_filename = jube2.util.util.substitution(
                         self._stderr_filename, parameter_dict)
                     stderr_filename = \
                         os.path.expandvars(os.path.expanduser(stderr_filename))
@@ -400,11 +491,14 @@ class Operation(object):
                 stderr = open(stderr_path, "a")
 
         # Use operation specific work directory
-        if self._work_dir is not None:
-            new_work_dir = jube2.util.substitution(
+        if self._work_dir is not None and len(self._work_dir) > 0:
+            new_work_dir = jube2.util.util.substitution(
                 self._work_dir, parameter_dict)
             new_work_dir = os.path.expandvars(os.path.expanduser(new_work_dir))
             work_dir = os.path.join(work_dir, new_work_dir)
+            # Create directory if it does not exist
+            if not jube2.conf.DEBUG_MODE and not os.path.exists(work_dir):
+                os.makedirs(work_dir)
 
         if not only_check_pending:
 
@@ -422,6 +516,10 @@ class Operation(object):
             # Execute "do"
             LOGGER.debug(">>> {0}".format(do))
             if (not jube2.conf.DEBUG_MODE) and (do != ""):
+                LOGGER.debug("    stdout: {0}".format(
+                    os.path.abspath(stdout_path)))
+                LOGGER.debug("    stderr: {0}".format(
+                    os.path.abspath(stderr_path)))
                 try:
                     if jube2.conf.VERBOSE_LEVEL > 1:
                         stdout_handle = subprocess.PIPE
@@ -429,7 +527,8 @@ class Operation(object):
                         stdout_handle = stdout
                     sub = subprocess.Popen(
                         [shell, "-c",
-                         "{0} && env > {1}".format(do, abs_info_file_path)],
+                         "{0} && env > \"{1}\"".format(do,
+                                                       abs_info_file_path)],
                         cwd=work_dir, stdout=stdout_handle,
                         stderr=stderr, shell=False,
                         env=env)
@@ -448,9 +547,13 @@ class Operation(object):
                             jube2.conf.VERBOSE_STDOUT_READ_CHUNK_SIZE)
                         if (not read_out):
                             break
-                        stdout.write(read_out)
-                        print(read_out, end="")
-                        time.sleep(jube2.conf.VERBOSE_STDOUT_POLL_SLEEP)
+                        else:
+                            try:
+                                print(read_out.decode(), end="")
+                            except UnicodeDecodeError:
+                                pass
+                            stdout.write(read_out)
+                            time.sleep(jube2.conf.VERBOSE_STDOUT_POLL_SLEEP)
                     sub.communicate()
 
                 returncode = sub.wait()
@@ -462,7 +565,7 @@ class Operation(object):
                 env = Operation.read_process_environment(work_dir)
 
                 # Read and store new environment
-                if environment is not None:
+                if (environment is not None) and (returncode == 0):
                     environment.clear()
                     environment.update(env)
 
@@ -492,8 +595,24 @@ class Operation(object):
                                 do,
                                 os.path.abspath(work_dir)))
 
+        continue_op = True
+        continue_cycle = True
+
+        # Check if further execution was skipped
+        if self._break_filename is not None:
+            break_filename = jube2.util.util.substitution(
+                self._break_filename, parameter_dict)
+            break_filename = \
+                os.path.expandvars(os.path.expanduser(break_filename))
+            if os.path.exists(os.path.join(work_dir, break_filename)):
+                LOGGER.debug(("\"{0}\" was found, workpackage execution and "
+                              " further loop continuation was stopped.")
+                             .format(break_filename))
+                continue_cycle = False
+
+        # Waiting to continue
         if self._async_filename is not None:
-            async_filename = jube2.util.substitution(
+            async_filename = jube2.util.util.substitution(
                 self._async_filename, parameter_dict)
             async_filename = \
                 os.path.expandvars(os.path.expanduser(async_filename))
@@ -502,14 +621,10 @@ class Operation(object):
                              .format(async_filename))
                 if jube2.conf.DEBUG_MODE:
                     LOGGER.debug("  skip waiting")
-                    return True
                 else:
-                    return False
-            else:
-                return True
-        else:
-            # Operation finished successfully
-            return True
+                    continue_op = False
+
+        return continue_op, continue_cycle
 
     def etree_repr(self):
         """Return etree object representation"""
@@ -517,6 +632,8 @@ class Operation(object):
         do_etree.text = self._do
         if self._async_filename is not None:
             do_etree.attrib["done_file"] = self._async_filename
+        if self._break_filename is not None:
+            do_etree.attrib["break_file"] = self._break_filename
         if self._stdout_filename is not None:
             do_etree.attrib["stdout"] = self._stdout_filename
         if self._stderr_filename is not None:

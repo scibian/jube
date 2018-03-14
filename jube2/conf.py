@@ -1,5 +1,5 @@
 # JUBE Benchmarking Environment
-# Copyright (C) 2008-2015
+# Copyright (C) 2008-2017
 # Forschungszentrum Juelich GmbH, Juelich Supercomputing Centre
 # http://www.fz-juelich.de/jsc/jube
 #
@@ -22,13 +22,14 @@ from __future__ import (print_function,
                         division)
 
 # general
-JUBE_VERSION = "2.1.0"
-ALLOWED_SCRIPTTYPES = ["python", "perl"]
+JUBE_VERSION = "2.2.0"
+ALLOWED_SCRIPTTYPES = set(["python", "perl", "shell"])
 DEBUG_MODE = False
 VERBOSE_LEVEL = 0
 UPDATE_VERSION_URL = "http://apps.fz-juelich.de/jsc/jube/jube2/version"
 UPDATE_URL = "http://apps.fz-juelich.de/jsc/jube/jube2/download.php"
 STANDARD_SHELL = "/bin/sh"
+EXIT_ON_ERROR = False
 
 # input/output
 DEFAULT_SEPARATOR = ","
@@ -43,6 +44,7 @@ PREPROCESS_MAX_ITERATION = 10
 
 # filenames
 WORKPACKAGE_DONE_FILENAME = "done"
+WORKPACKAGE_ERROR_FILENAME = "error"
 CONFIGURATION_FILENAME = "configuration.xml"
 WORKPACKAGES_FILENAME = "workpackages.xml"
 ANALYSE_FILENAME = "analyse.xml"

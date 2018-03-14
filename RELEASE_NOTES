@@ -3,6 +3,195 @@ Release notes
 *************
 
 
+Version 2.2.0
+=============
+
+Release: 2017-12-21
+
+* New feature: step cycles. See Step cycle
+
+* New parameter "update_mode". See Parameter update
+
+* Result creation by scanning multiple steps now automatically
+  creates a combined output
+
+* Speed up of the *JUBE* internal management if a large number of
+  work packages is used
+
+* *JUBE* 1 conversion tool is not available any more
+
+* New general commandline option "--strict" stops *JUBE* if there is
+  a version mismatch
+
+* Broken analysis files will now be ignored
+
+* Fix combination of "active" and "shared"
+
+* Fix sorting problem for multiple resutl columns
+
+* Fix parameter problem, if the continue command is used and the
+  parameter holds a value having multiple lines
+
+
+Version 2.1.4
+=============
+
+Release: 2016-12-20
+
+* "--id" indices on the commandline can now be negative to count
+  from the end of the available benchmarks
+
+* *JUBE* now allows a basic auto completion mechanism if using
+  *BASH*. To activate: "eval "$(jube complete)""
+
+* Fix result sorting bug in Python3
+
+* New "jube_benchmark_rundir" variable which holds the top level
+  *JUBE* directory (the absolute "outpath" directory)
+
+* Fix CSV output format, if parameter contain linebreaks.
+
+* "active" attribute can now be used in "<prepare>", "<copy>" and
+  "<link>"
+
+* New FAQ entry concerning multiple file analysis: *Frequently Asked
+  Questions*
+
+* "<parameter>" using "mode="shell"" or "mode="perl"" will now stop
+  program execution if an error occurs (similar to "mode="python"")
+
+* "<do>" specfic "work_dir" is now created automatically if needed
+
+* "directory" attribute in "<link>" and "<copy>" was renamed to
+  "source_dir" (old attribute name is still possible)
+
+     * "source_dir" now allows parameter substitution
+
+* New attribute "target_dir" in "<link>" and "<copy>" to specify the
+  target directory path prefix
+
+
+Version 2.1.3
+=============
+
+Release: 2016-09-01
+
+* Fix broken CSV table output style
+
+* Fix "jube_wp_..." parameter handling bug, if these parameter are
+  used inside another script parameter
+
+* Added new optional argument "suffix="..."" to the "<step>" tag
+
+     * Parameter are allowed inside this argument string.
+
+     * The evaluated string will be attached to the default
+       workpackage directory name to allow users to find specific
+       directories in an easier way (e.g. "000001_stepname_suffix" ).
+
+* The *XML* schema files can now be found inside the "contrib"
+  folder
+
+* Added new advanced error handling
+
+     * JUBE will not stop any more if an error occurs inside a "run"
+       or "continue". The error will be marked and the corresponding
+       workpackage will not be touched anymore.
+
+     * There is also a "-e"/"--exit" option to overwrite this
+       behaviour to directly exit if there is an error.
+
+
+Version 2.1.2
+=============
+
+Release: 2016-07-29
+
+* The internal parameter handling is much faster now, especially if
+  a large number of parameter is used within the same step.
+
+* Fix critical bug when storing environment variables. Environment
+  variables wasn't read correctly inside a step if this step was only
+  executed after a "jube continue" run.
+
+* Fix bug inside a "<sub>" if it contains any linebreak
+
+* Quotes are added automatically inside the "$jube_wp_envstr"
+  variable to support spaces in the environment variable argument list
+
+* Combining "-u" and "tags" in a "jube result" run will not filter
+  the result branches anymore
+
+* Allow lowercase "false" in bool expressions (e.g. the "active"
+  option)
+
+* Fix bug when using *JUBE* in a *Python3.x* environment
+
+* The "jube help" output was restructed to display separate key
+  columns instead of a keyword list
+
+* "<pattern>" can now contain a "default=..." attribute which set
+  their default value if the pattern can't be found or if it can't be
+  evaluated
+
+* "null_value=..." was removed from the "<column>" and "<key>"-tag
+  because the new default attribute matches its behaviour
+
+* Added first *JUBE* FAQ entries to the documentation: *Frequently
+  Asked Questions*
+
+* New "active"-attribute inside a "<step>"-tag. The attribute
+  enables or disables the corresponding step (and all following
+  steps). It can contain any bool expression and available parameter.
+
+* Fix bug in "<link>" handling if an alternative link name is used
+  which points to a sub directory
+
+* Added new option "-c / --csv-parametrization" to "jube info"
+  command to show a workpackage specfic parametrisation by using the
+  CSV format (similar to the existing "-p" option)
+
+* Allow Shell expansion in "<link>" tags. "<link>" now also support
+  the "*"
+
+* Restructure internal "<copy>" and "<link>" handling
+
+* All example platform files were updated an simplified
+
+
+Version 2.1.1
+=============
+
+Release: 2016-04-14
+
+* *JUBE* will now show only the latest benchmark result by default,
+  " --id all" must be used to see all results
+
+* Bool expressions can now be used directly in the "<do active="">"
+  attribute
+
+* Added "filter" attribute in "<table>" and "<syslog>" to show only
+  specifix result entries (based on a bool expression)
+
+* New "<parameter>" and "<pattern>" mode: "mode="shell""
+
+* Allow multiline output in result tables
+
+* Fix wrong group handling if "JUBE_GROUP_NAME" is used
+
+* Scripting parameter (e.g. "mode="python"") can now handle $ to
+  allow access to environment variables
+
+* Fix $$ bug ($$ were ignored when used within a parameter)
+
+* Fix "$jube_wp_parent_..._id" bug if "$jube_wp_parent_..._id" is
+  used within another parameter
+
+* Fix bug in std calculation when creating statistical result values
+
+* Fix bug if tags are used within "<include>"
+
+
 Version 2.1.0
 =============
 
@@ -64,7 +253,7 @@ Release: 2015-09-17
 * *JUBE* will ignore folders in the benchmark directory which does
   not contain a "configuration.xml"
 
-* New pattern reduce example *Statistic pattern values*
+* New pattern reduce example Statistic pattern values
 
 * New internal directory handling to allow more flexible feature
   addition
@@ -117,7 +306,7 @@ Release: 2015-06-16
 
 * users can now change the *JUBE* standard Shell ("/bin/sh") by
   using the new environment variable "JUBE_EXEC_SHELL", see
-  *Configuration*
+  Configuration
 
 * fixes a bug if a Shell filename completion results to a single
   file name (inside the "<copy>"-tag)
@@ -160,7 +349,7 @@ Release: 2015-04-09
   * also multiple files can be mixed: "<use
     from="file:set1,file2:set2">set$nr</use>"
 
-  * new example *Parameter dependencies*
+  * new example Parameter dependencies
 
 * allow "use"-attribute in file-tag to select file specific
   patternsets "<file use="patternset">"

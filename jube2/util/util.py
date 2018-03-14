@@ -1,5 +1,5 @@
 # JUBE Benchmarking Environment
-# Copyright (C) 2008-2015
+# Copyright (C) 2008-2017
 # Forschungszentrum Juelich GmbH, Juelich Supercomputing Centre
 # http://www.fz-juelich.de/jsc/jube
 #
@@ -15,7 +15,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-"""Storage for utility functions, constants and classes"""
+"""Utility functions, constants and classes"""
 
 from __future__ import (print_function,
                         unicode_literals,
@@ -25,19 +25,16 @@ try:
     import queue
 except ImportError:
     import Queue as queue
-import xml.etree.ElementTree as ET
 import re
 import string
+import operator
 import os.path
 import subprocess
 import jube2.log
-import sys
 import time
-import textwrap
 import jube2.conf
 import grp
 import pwd
-import copy
 
 
 LOGGER = jube2.log.get_logger(__name__)
@@ -56,12 +53,8 @@ class WorkStat(object):
         """Add some workpackage to queue"""
 
         # Substitute max_wps if needed
-        parameterset = \
-            workpackage.add_jube_parameter(workpackage.parameterset.copy())
-        parameter = \
-            dict([[par.name, par.value] for par in
-                  parameterset.constant_parameter_dict.values()])
-        max_wps = int(substitution(workpackage.step.max_wps, parameter))
+        max_wps = int(substitution(workpackage.step.max_wps,
+                                   workpackage.parameter_dict))
 
         if (max_wps == 0) or \
            (workpackage.started) or \
@@ -125,152 +118,31 @@ def id_dir(base_dir, id_number):
                                        id_number=id_number))
 
 
-def text_boxed(text):
-    """Create an ASCII boxed version of text."""
-    box = "#" * jube2.conf.DEFAULT_WIDTH
-    for line in text.split("\n"):
-        box += "\n"
-        lines = ["# {0}".format(element) for element in
-                 textwrap.wrap(line.strip(), jube2.conf.DEFAULT_WIDTH - 2)]
-        if len(lines) == 0:
-            box += "#"
-        else:
-            box += "\n".join(lines)
-    box += "\n" + "#" * jube2.conf.DEFAULT_WIDTH
-    return box
-
-
-def text_line():
-    """Return a horizonal ASCII line"""
-    return "#" * jube2.conf.DEFAULT_WIDTH
-
-
-def text_table(entries_ext, use_header_line=False, indent=1, align_right=True,
-               auto_linebreak=True, colw=None, pretty=True, separator=",",
-               transpose=False):
-    """Create a ASCII based table.
-    entries must contain a list of lists, use_header_line can be used to
-    mark the first entry as title.
-
-    Return the ASCII table
-    """
-
-    if not pretty:
-        auto_linebreak = False
-        use_header_line = False
-        indent = 0
-
-    # Transpose data entries if needed
-    if transpose:
-        entries = list(zip(*entries_ext))
-        use_header_line = False
-    else:
-        entries = copy.deepcopy(entries_ext)
-
-    max_length = list()
-    table_str = ""
-    header_line_used = not use_header_line
-
-    # calculate needed maxlength
-    for item in entries:
-        for i, text in enumerate(item):
-            if i > len(max_length) - 1:
-                max_length.append(0)
-            if pretty:
-                max_length[i] = max(max_length[i], len(text))
-                if auto_linebreak:
-                    max_length[i] = min(max_length[i],
-                                        jube2.conf.MAX_TABLE_CELL_WIDTH)
-
-    if colw is not None:
-        for i, maxl in enumerate(max_length):
-            if i < len(colw):
-                max_length[i] = max(maxl, colw[i])
-
-    # fill cells
-    for item in entries:
-
-        # Wrap text
-        wraps = list()
-        for text in item:
-            if auto_linebreak:
-                wraps.append(textwrap.wrap(text,
-                                           jube2.conf.MAX_TABLE_CELL_WIDTH))
-            else:
-                wraps.append([text])
-
-        grow = True
-        height = 0
-        while grow:
-            grow = False
-            line_str = " " * indent
-            for i, wrap in enumerate(wraps):
-                grow = grow or len(wrap) > height + 1
-                if len(wrap) > height:
-                    text = wrap[height]
-                else:
-                    text = ""
-                if align_right and height == 0:
-                    align = ">"
-                else:
-                    align = "<"
-                line_str += \
-                    ("{0:" + align + str(max_length[i]) + "s}").format(text)
-                if pretty:
-                    if i < len(max_length) - 1:
-                        line_str += " | "
-                else:
-                    if i < len(max_length) - 1:
-                        line_str += separator
-            line_str += "\n"
-            table_str += line_str
-            height += 1
-
-        if not header_line_used:
-            # Create title separator line
-            table_str += " " * indent
-            for i, cell_length in enumerate(max_length):
-                table_str += "-" * cell_length
-                if i < len(max_length) - 1:
-                    table_str += "-+-"
-            table_str += "\n"
-            header_line_used = True
-    return table_str
-
-
 def substitution(text, substitution_dict):
     """Substitute templates given by parameter_dict inside of text"""
     changed = True
     count = 0
+    # All values must be string values
+    str_substitution_dict = dict([(k, str(v)) for k, v in
+                                  substitution_dict.items()])
+    # Preserve non evaluated parameter before starting substitution
+    local_substitution_dict = dict([(k, re.sub(r"\$", "$$", v)
+                                     if "$" in v else v) for k, v in
+                                    str_substitution_dict.items()])
     # Run multiple times to allow recursive parameter substitution
     while changed and count < jube2.conf.MAX_RECURSIVE_SUB:
         count += 1
         orig_text = text
         # Save double $$
-        text = re.sub(r"(\$\$)(?=(\$\$|[^$]))", "$$$$", text)
+        text = re.sub(r"(\$\$)(?=(\$\$|[^$]))", "$$$$", text) \
+            if "$" in text else text
         tmp = string.Template(text)
-        new_text = tmp.safe_substitute(substitution_dict)
+        new_text = tmp.safe_substitute(local_substitution_dict)
         changed = new_text != orig_text
         text = new_text
     # Final substitution to remove $$
     tmp = string.Template(text)
-    return tmp.safe_substitute(substitution_dict)
-
-
-def format_value(format_string, value):
-    """Return formated value"""
-    if (type(value) is not int) and \
-            (("d" in format_string) or ("b" in format_string) or
-             ("c" in format_string) or ("o" in format_string) or
-             ("x" in format_string) or ("X" in format_string)):
-        value = int(float(value))
-    elif (type(value) is not float) and \
-         (("e" in format_string) or ("E" in format_string) or
-          ("f" in format_string) or ("F" in format_string) or
-          ("g" in format_string) or ("G" in format_string)):
-        value = float(value)
-    format_string = "{{0:{0}}}".format(format_string)
-    return format_string.format(value)
+    return tmp.safe_substitute(str_substitution_dict)
 
 
 def convert_type(value_type, value, stop=True):
@@ -278,22 +150,20 @@ def convert_type(value_type, value, stop=True):
     result_value = None
     try:
         if value_type == "int":
-            result_value = int(float(value))
+            if value == "nan":
+                result_value = float("nan")
+            else:
+                result_value = int(float(value))
         elif value_type == "float":
             result_value = float(value)
         else:
             result_value = value
     except ValueError:
         if stop:
-            raise ValueError(("\"{0}\" can't be represented as a \"{1}\"")
+            raise ValueError(("\"{0}\" cannot be represented as a \"{1}\"")
                              .format(value, value_type))
         else:
-            if value_type == "int":
-                result_value = int()
-            elif value_type == "float":
-                result_value = float()
-            LOGGER.warning(("\"{0}\" can't be represented as a \"{1}\"")
-                           .format(value, value_type))
+            result_value = value
     return result_value
 
 
@@ -301,62 +171,44 @@ def script_evaluation(cmd, script_type):
     """cmd will be evaluated with given script language"""
     if script_type == "python":
         return str(eval(cmd))
-    elif script_type == "perl":
-        cmd = "perl -e \"print " + cmd + "\""
+    elif script_type in ["perl", "shell"]:
+        if script_type == "perl":
+            cmd = "perl -e \"print " + cmd + "\""
         sub = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, shell=True)
-        return sub.communicate()[0]
+        stdout, stderr = sub.communicate()
+        # Check command execution error code
+        errorcode = sub.wait()
+        if errorcode != 0:
+            raise RuntimeError(stderr)
+        else:
+            if len(stderr.strip()) > 0:
+                try:
+                    LOGGER.debug((" The command \"{0}\" was executed with a "
+                                  "successful error code,\n  but the "
+                                  "following error message was produced "
+                                  "during its execution: {1}")
+                                 .format(cmd, stderr))
+                except UnicodeDecodeError:
+                    pass
+            return stdout
 
 
-def print_loading_bar(current_cnt, all_cnt, second_cnt=0):
-    """Show a simple loading animation"""
-    width = jube2.conf.DEFAULT_WIDTH - 10
-    if all_cnt > 0:
-        done_cnt = (current_cnt * width) // all_cnt
-        medium_cnt = (second_cnt * width) // all_cnt
+def eval_bool(cmd):
+    """Evaluate a bool expression"""
+    if cmd.lower() == "true":
+        return True
+    elif cmd.lower() == "false":
+        return False
     else:
-        done_cnt = 0
-        medium_cnt = 0
-
-    # shrink medium_cnt if there was some rounding issue
-    if (medium_cnt > 0) and (width < medium_cnt + done_cnt):
-        medium_cnt = width - done_cnt
-
-    # fill up medium_cnt if there was some rounding issue
-    if (current_cnt + second_cnt == all_cnt) and \
-            (medium_cnt + done_cnt < width):
-        medium_cnt += width - (medium_cnt + done_cnt)
-
-    todo_cnt = width - done_cnt - medium_cnt
-
-    bar_str = "\r{0}{1}{2} ({3:3d}/{4:3d})".format("#" * done_cnt,
-                                                   "0" * medium_cnt,
-                                                   "." * todo_cnt,
-                                                   current_cnt, all_cnt)
-    sys.stdout.write(bar_str)
-    sys.stdout.flush()
-
-
-def element_tree_tostring(element, encoding=None):
-    """A more encoding friendly ElementTree.tostring method"""
-    class Dummy(object):
-
-        """Dummy class to offer write method for etree."""
-
-        def __init__(self):
-            self._data = list()
-
-        @property
-        def data(self):
-            """Return data"""
-            return self._data
-
-        def write(self, *args):
-            """Simulate write"""
-            self._data.append(*args)
-    file_dummy = Dummy()
-    ET.ElementTree(element).write(file_dummy, encoding)
-    return "".join(dat.decode(encoding) for dat in file_dummy.data)
+        try:
+            return bool(eval(cmd))
+        except SyntaxError as se:
+            raise ValueError(
+                ("\"{0}\" could not be evaluated and handled as boolean "
+                 "value. Check if all parameter were correctly replaced and "
+                 "the syntax of the expression is well formed ({1}).").format(
+                     cmd, str(se)))
 
 
 def get_tree_element(node, tag_path=None, attribute_dict=None):
@@ -510,7 +362,45 @@ def consistency_check(benchmark):
     # Dependency check
     depend_dict = \
         dict([(step.name, step.depend) for step in benchmark.steps.values()])
-    order = jube2.util.resolve_depend(depend_dict)
+    order = resolve_depend(depend_dict)
     for step_name in benchmark.steps:
         if step_name not in order:
-            raise ValueError("Can't resolve dependencies.")
+            raise ValueError("Cannot resolve dependencies.")
+
+
+class CompType(object):
+    """Allow comparison of different datatypes"""
+
+    def __init__(self, value):
+        self.__value = value
+
+    def __repr__(self):
+        return str(self.__value)
+
+    @property
+    def value(self):
+        return self.__value
+
+    def _special_comp(self, other, comp_func):
+        """Allow comparision of different datatypes"""
+        if self.value is None or other.value is None:
+            return False
+        else:
+            try:
+                return comp_func(self.value, other.value)
+            except TypeError:
+                return False
+
+    def __lt__(self, other):
+        return self._special_comp(other, operator.lt)
+
+    def __eq__(self, other):
+        return self._special_comp(other, operator.eq)
+
+
+def safe_split(text, separator):
+    """Like split for non-empty separator, list with text otherwise."""
+    if separator:
+        return text.split(separator)
+    else:
+        return [text]
