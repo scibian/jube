@@ -59,6 +59,7 @@ attlist.parameter &=
   attribute type { "int" | "string" | "float" }?,
   attribute mode { text }?,
   attribute export { "true" | "false" | "True" | "False" }?,
+  attribute update_mode { "never" | "use" | "step" | "cycle" | "always" }?,
   attribute separator { text }?,
   attribute tag { text }?
 substituteset =
@@ -89,23 +90,30 @@ prepare = element prepare { attlist.prepare, text }
 attlist.prepare &=
   attribute stdout { text }?,
   attribute stderr { text }?,
+  attribute active { text }?,
   attribute work_dir { text }?,
   attribute tag { text }?
 link = element link { attlist.link, text }
 attlist.link &=
   attribute directory { text }?,
+  attribute source_dir { text }?,
+  attribute target_dir { text }?,
   attribute name { text }?,
   attribute rel_path_ref { "internal" | "external" }?,
   attribute file_path_ref { text }?,
   attribute separator { text }?,
+  attribute active { text }?,
   attribute tag { text }?
 copy = element copy { attlist.copy, text }
 attlist.copy &=
   attribute directory { text }?,
+  attribute source_dir { text }?,
+  attribute target_dir { text }?,
   attribute name { text }?,
   attribute rel_path_ref { "internal" | "external" }?,
   attribute file_path_ref { text }?,
   attribute separator { text }?,
+  attribute active { text }?,
   attribute tag { text }?
 patternset =
   element patternset { attlist.patternset, (pattern | \include)* }
@@ -119,14 +127,18 @@ attlist.pattern &=
   attribute type { "int" | "string" | "float" }?,
   attribute mode { text }?,
   attribute unit { text }?,
+  attribute default { text }?,
   attribute tag { text }?
 step = element step { attlist.step, (use | do | \include)* }
 attlist.step &=
   attribute name { text },
   attribute iterations { text }?,
+  attribute cycles { text }?,
   attribute max_async { text }?,
   attribute depend { text }?,
   attribute work_dir { text }?,
+  attribute active { text }?,
+  attribute suffix { text }?,
   attribute export { "true" | "false" | "True" | "False" }?,
   attribute shared { text }?,
   attribute tag { text }?
@@ -148,6 +160,7 @@ attlist.use &=
 do = element do { attlist.do, any }
 attlist.do &=
   attribute done_file { text }?,
+  attribute break_file { text }?,
   attribute active { text }?,
   attribute shared { "true" | "false" | "True" | "False" }?,
   attribute stdout { text }?,
@@ -169,6 +182,7 @@ attlist.table &=
   attribute separator { text }?,
   attribute transpose { "true" | "false" | "True" | "False" }?,
   attribute sort { text }?,
+  attribute filter { text }?,
   attribute tag { text }?
 syslog = element syslog { attlist.syslog, (key | \include)* }
 attlist.syslog &=
@@ -178,19 +192,18 @@ attlist.syslog &=
   attribute port { text }?,
   attribute format { text }?,
   attribute sort { text }?,
+  attribute filter { text }?,
   attribute tag { text }?
 column = element column { attlist.column, text }
 attlist.column &=
   attribute colw { text }?,
   attribute format { text }?,
   attribute title { text }?,
-  attribute null_value { text }?,
   attribute tag { text }?
 key = element key { attlist.key, text }
 attlist.key &=
   attribute format { text }?,
   attribute title { text }?,
-  attribute null_value { text }?,
   attribute tag { text }?
 file = element file { attlist.file, text }
 attlist.file &=

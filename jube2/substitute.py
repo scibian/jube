@@ -1,5 +1,5 @@
 # JUBE Benchmarking Environment
-# Copyright (C) 2008-2015
+# Copyright (C) 2008-2017
 # Forschungszentrum Juelich GmbH, Juelich Supercomputing Centre
 # http://www.fz-juelich.de/jsc/jube
 #
@@ -22,7 +22,8 @@ from __future__ import (print_function,
                         division)
 
 import os
-import jube2.util
+import jube2.util.util
+import jube2.util.output
 import jube2.conf
 import xml.etree.ElementTree as ET
 import jube2.log
@@ -73,9 +74,9 @@ class Substituteset(object):
         if parameter_dict is not None:
             substitute_dict = dict()
             for sub in self._substitute_dict:
-                new_source = jube2.util.substitution(sub, parameter_dict)
-                new_dest = jube2.util.substitution(self._substitute_dict[sub],
-                                                   parameter_dict)
+                new_source = jube2.util.util.substitution(sub, parameter_dict)
+                new_dest = jube2.util.util.substitution(
+                    self._substitute_dict[sub], parameter_dict)
                 substitute_dict[new_source] = new_dest
         else:
             substitute_dict = self._substitute_dict
@@ -86,20 +87,20 @@ class Substituteset(object):
             infile_name = data[1]
             out_mode = data[2]
 
-            infile = jube2.util.substitution(infile_name,
-                                             parameter_dict)
-            outfile = jube2.util.substitution(outfile_name,
-                                              parameter_dict)
+            infile = jube2.util.util.substitution(infile_name,
+                                                  parameter_dict)
+            outfile = jube2.util.util.substitution(outfile_name,
+                                                   parameter_dict)
 
             LOGGER.debug("  substitute {0} -> {1}".format(infile, outfile))
 
             LOGGER.debug("  substitute:\n" +
-                         jube2.util.text_table([("source", "dest")] +
-                                               [(source, dest)
-                                                for source, dest in
-                                                substitute_dict.items()],
-                                               use_header_line=True, indent=9,
-                                               align_right=False))
+                         jube2.util.output.text_table(
+                             [("source", "dest")] + [(source, dest)
+                                                     for source, dest in
+                                                     substitute_dict.items()],
+                             use_header_line=True, indent=9,
+                             align_right=False))
             if not jube2.conf.DEBUG_MODE:
                 infile = os.path.join(work_dir, infile)
                 outfile = os.path.join(work_dir, outfile)
@@ -135,7 +136,7 @@ class Substituteset(object):
         for source in self._substitute_dict:
             sub_etree = ET.SubElement(substituteset_etree, "sub")
             sub_etree.attrib["source"] = source
-            sub_etree.attrib["dest"] = self._substitute_dict[source]
+            sub_etree.text = self._substitute_dict[source]
         return substituteset_etree
 
     def __repr__(self):

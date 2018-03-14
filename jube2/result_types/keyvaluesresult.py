@@ -1,5 +1,5 @@
 # JUBE Benchmarking Environment
-# Copyright (C) 2008-2015
+# Copyright (C) 2008-2017
 # Forschungszentrum Juelich GmbH, Juelich Supercomputing Centre
 # http://www.fz-juelich.de/jsc/jube
 #
@@ -25,6 +25,8 @@ from jube2.result import Result
 import jube2.log
 import xml.etree.ElementTree as ET
 import operator
+import jube2.util.util
+import jube2.util.output
 
 LOGGER = jube2.log.get_logger(__name__)
 
@@ -93,11 +95,10 @@ class KeyValuesResult(Result):
             # Fill up existing rows
             if last_index != len(self._keys):
                 for row in self._data:
-                    row += [key.null_value
-                            for key in self._keys[last_index:]]
+                    row += ["" for key in self._keys[last_index:]]
             # Add new rows
             for row in data:
-                new_row = [key.null_value for key in self._keys]
+                new_row = ["" for key in self._keys]
                 for i, index in enumerate(order):
                     new_row[index] = row[i]
                 self._data.append(new_row)
@@ -133,12 +134,10 @@ class KeyValuesResult(Result):
     class DataKey(object):
         """Class represents one data key """
 
-        def __init__(self, name, title=None, format_string=None,
-                     null_value="", unit=None):
+        def __init__(self, name, title=None, format_string=None, unit=None):
             self._name = name
             self._title = title
             self._format_string = format_string
-            self._null_value = null_value
             self._unit = unit
 
         @property
@@ -150,11 +149,6 @@ class KeyValuesResult(Result):
         def name(self):
             """Key name"""
             return self._name
-
-        @property
-        def null_value(self):
-            """Key data null value"""
-            return self._null_value
 
         @property
         def format(self):
@@ -190,8 +184,6 @@ class KeyValuesResult(Result):
                 key_etree.attrib["format"] = self._format_string
             if self._title is not None:
                 key_etree.attrib["title"] = self._title
-            if self._null_value != "":
-                key_etree.attrib["null_value"] = self._null_value
             return key_etree
 
         def __eq__(self, other):
@@ -200,19 +192,18 @@ class KeyValuesResult(Result):
         def __hash__(self):
             return hash(self.resulting_name)
 
-    def __init__(self, name, sort_names=None):
-        Result.__init__(self, name)
+    def __init__(self, name, sort_names=None, res_filter=None):
+        Result.__init__(self, name, res_filter)
         self._keys = list()
         if sort_names is None:
             self._sort_names = list()
         else:
             self._sort_names = sort_names
 
-    def add_key(self, name, format_string=None, title=None, null_value="",
-                unit=None):
+    def add_key(self, name, format_string=None, title=None, unit=None):
         """Add an additional key to the dataset"""
         self._keys.append(KeyValuesResult.DataKey(name, title, format_string,
-                                                  null_value, unit))
+                                                  unit))
 
     def create_result_data(self):
         """Create result data"""
@@ -235,8 +226,12 @@ class KeyValuesResult(Result):
         # Sort the resultset
         if len(self._sort_names) > 0:
             LOGGER.debug("sort using: {0}".format(",".join(self._sort_names)))
-            sort_data = sorted(sort_data,
-                               key=operator.itemgetter(*self._sort_names))
+            # Use CompType for sorting to allow comparison of None values
+            sort_data = \
+                sorted(sort_data,
+                       key=lambda x:
+                       [jube2.util.util.CompType(x[sort_name])
+                        for sort_name in self._sort_names])
 
         # Create table data
         table_data = list()
@@ -246,21 +241,21 @@ class KeyValuesResult(Result):
             for key in self._keys:
                 if key.name in dataset:
                     # Cnt number of final entries to avoid complete empty
-                    # result entires
+                    # result entries
                     cnt += 1
                     # Set null value
                     if dataset[key.name] is None:
-                        value = key.null_value
+                        value = ""
                     else:
                         # Format data values to create string representation
                         if key.format is not None:
-                            value = jube2.util.format_value(key.format,
-                                                            dataset[key.name])
+                            value = jube2.util.output.format_value(
+                                key.format, dataset[key.name])
                         else:
                             value = str(dataset[key.name])
                     row.append(value)
                 else:
-                    row.append(key.null_value)
+                    row.append("")
 
             if cnt > 0:
                 table_data.append(row)

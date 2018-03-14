@@ -1,5 +1,5 @@
 # JUBE Benchmarking Environment
-# Copyright (C) 2008-2015
+# Copyright (C) 2008-2017
 # Forschungszentrum Juelich GmbH, Juelich Supercomputing Centre
 # http://www.fz-juelich.de/jsc/jube
 #
@@ -28,7 +28,8 @@ import re
 import glob
 import math
 import jube2.pattern
-import jube2.util
+import jube2.util.util
+import jube2.util.output
 
 LOGGER = jube2.log.get_logger(__name__)
 
@@ -50,7 +51,7 @@ class Analyser(object):
             """Add an addtional patternset name"""
             for use_name in use_names:
                 if use_name in self._use:
-                    raise ValueError(("Can't use element \"{0}\" two times")
+                    raise ValueError(("Element \"{0}\" can only be used once")
                                      .format(use_name))
                 self._use.add(use_name)
 
@@ -122,14 +123,15 @@ class Analyser(object):
         """Add an addtional analyse file"""
         if step_name not in self._analyse:
             self._analyse[step_name] = list()
-        if analyse_file not in self._analyse[step_name]:
+        if (analyse_file not in self._analyse[step_name]) and \
+                (analyse_file is not None):
             self._analyse[step_name].append(analyse_file)
 
     def add_uses(self, use_names):
         """Add an addtional patternset name"""
         for use_name in use_names:
             if use_name in self._use:
-                raise ValueError(("Can't use element \"{0}\" two times")
+                raise ValueError(("Element \"{0}\" can only be used once")
                                  .format(use_name))
             self._use.add(use_name)
 
@@ -162,7 +164,7 @@ class Analyser(object):
             if not patternset.is_compatible(self._benchmark.patternsets[use]):
                 incompatible_names = patternset.get_incompatible_pattern(
                     self._benchmark.patternsets[use])
-                raise RuntimeError(("Can't use patternset \"{0}\" " +
+                raise RuntimeError(("Cannot use patternset \"{0}\" " +
                                     "in analyser \"{1}\", because there are " +
                                     "incompatible pattern name combinations: "
                                     "{2}")
@@ -186,18 +188,20 @@ class Analyser(object):
         # Print debug info
         debugstr = "  available pattern:\n"
         debugstr += \
-            jube2.util.text_table([("pattern", "value")] +
-                                  sorted([(par.name, par.value) for par in
-                                          patternset.pattern_storage]),
-                                  use_header_line=True, indent=9,
-                                  align_right=False)
+            jube2.util.output.text_table(
+                [("pattern", "value")] +
+                sorted([(par.name, par.value) for par in
+                        patternset.pattern_storage]),
+                use_header_line=True, indent=9,
+                align_right=False)
         debugstr += "\n  available derived pattern:\n"
         debugstr += \
-            jube2.util.text_table([("pattern", "value")] +
-                                  sorted([(par.name, par.value) for par in
-                                          patternset.derived_pattern_storage]),
-                                  use_header_line=True, indent=9,
-                                  align_right=False)
+            jube2.util.output.text_table(
+                [("pattern", "value")] +
+                sorted([(par.name, par.value) for par in
+                        patternset.derived_pattern_storage]),
+                use_header_line=True, indent=9,
+                align_right=False)
         LOGGER.debug(debugstr)
 
         for stepname in self._analyse:
@@ -228,20 +232,16 @@ class Analyser(object):
                     if not workpackage.started:
                         continue
 
-                    # Get parameterset of current workpackage
-                    parameterset = \
-                        workpackage.add_jube_parameter(
-                            workpackage.history.copy())
-
                     parameter = \
                         dict([[par.name, par.value] for par in
-                              parameterset.constant_parameter_dict.values()])
+                              workpackage.parameterset.
+                              constant_parameter_dict.values()])
 
                     for file_obj in self._analyse[stepname]:
                         if step.alt_work_dir is not None:
                             file_path = step.alt_work_dir
-                            file_path = jube2.util.substitution(file_path,
-                                                                parameter)
+                            file_path = jube2.util.util.substitution(
+                                file_path, parameter)
                             file_path = \
                                 os.path.expandvars(
                                     os.path.expanduser(file_path))
@@ -251,7 +251,8 @@ class Analyser(object):
                             file_path = workpackage.work_dir
 
                         filename = \
-                            jube2.util.substitution(file_obj.path, parameter)
+                            jube2.util.util.substitution(file_obj.path,
+                                                         parameter)
                         filename = \
                             os.path.expandvars(os.path.expanduser(filename))
 
@@ -262,15 +263,42 @@ class Analyser(object):
 
                             new_result_dict, match_dict = \
                                 self._analyse_file(path, local_patternset,
-                                                   parameterset, match_dict,
+                                                   workpackage.parameterset,
+                                                   match_dict,
                                                    file_obj.use)
                             result[stepname][root_workpackage.id].update(
                                 new_result_dict)
 
+                # Set default pattern values if available and necessary
+                new_result_dict = result[stepname][root_workpackage.id]
+                for pattern in local_patternset.pattern_storage:
+                    if (pattern.default_value is not None) and \
+                            (pattern.name not in new_result_dict):
+                        default = pattern.default_value
+                        # Convert default value
+                        if pattern.content_type == "int":
+                            if default == "nan":
+                                default = float("nan")
+                            else:
+                                default = int(float(default))
+                        elif pattern.content_type == "float":
+                            default = float(default)
+                        new_result_dict[pattern.name] = default
+                        new_result_dict[pattern.name + "_cnt"] = 0
+                        new_result_dict[pattern.name + "_last"] = default
+                        if pattern.content_type in ["int", "float"]:
+                            new_result_dict.update(
+                                {pattern.name + "_sum": default,
+                                 pattern.name + "_min": default,
+                                 pattern.name + "_max": default,
+                                 pattern.name + "_avg": default,
+                                 pattern.name + "_sum2": default**2,
+                                 pattern.name + "_std": 0})
+
                 # Evaluate derived pattern
                 if len(result[stepname][root_workpackage.id]) > 0:
                     new_result_dict = self._eval_derived_pattern(
-                        local_patternset, parameterset,
+                        local_patternset, root_workpackage.parameterset,
                         result[stepname][root_workpackage.id])
                     result[stepname][root_workpackage.id].update(
                         new_result_dict)
@@ -288,7 +316,6 @@ class Analyser(object):
 
         # Get jube patternset
         jube_pattern = jube2.pattern.get_jube_pattern()
-
         # calculate derived pattern
         patternset.derived_pattern_substitution(
             [parameterset, resultset, jube_pattern.pattern_storage])
@@ -298,8 +325,8 @@ class Analyser(object):
         for par in patternset.derived_pattern_storage:
             if par.mode not in jube2.conf.ALLOWED_SCRIPTTYPES:
                 new_result_dict[par.name] = \
-                    jube2.util.convert_type(par.content_type,
-                                            par.value, stop=False)
+                    jube2.util.util.convert_type(par.content_type,
+                                                 par.value, stop=False)
         return new_result_dict
 
     def _analyse_file(self, file_path, patternset, parameterset,
@@ -377,13 +404,16 @@ class Analyser(object):
             for match in match_list:
                 try:
                     if pattern.content_type == "int":
-                        new_match_list.append(int(float(match)))
+                        if match == "nan":
+                            new_match_list.append(float("nan"))
+                        else:
+                            new_match_list.append(int(float(match)))
                     elif pattern.content_type == "float":
                         new_match_list.append(float(match))
                     else:
                         new_match_list.append(match)
                 except ValueError:
-                    LOGGER.warning(("\"{0}\" can't be represented " +
+                    LOGGER.warning(("\"{0}\" cannot be represented " +
                                     "as a \"{1}\"")
                                    .format(match, pattern.content_type))
             match_list = new_match_list
@@ -421,16 +451,16 @@ class Analyser(object):
 
                 if pattern.content_type in ["int", "float"]:
                     if match_dict[pattern.name]["cnt"] > 0:
-                            match_dict[pattern.name]["avg"] = \
-                                (match_dict[pattern.name]["sum"] /
-                                 match_dict[pattern.name]["cnt"])
+                        match_dict[pattern.name]["avg"] = \
+                            (match_dict[pattern.name]["sum"] /
+                             match_dict[pattern.name]["cnt"])
 
                     if match_dict[pattern.name]["cnt"] > 1:
                         match_dict[pattern.name]["std"] = math.sqrt(
-                            (match_dict[pattern.name]["sum2"] -
-                             (match_dict[pattern.name]["sum"]**2 /
-                              match_dict[pattern.name]["cnt"])) /
-                            (match_dict[pattern.name]["cnt"] - 1))
+                            (abs(match_dict[pattern.name]["sum2"] -
+                                 (match_dict[pattern.name]["sum"]**2 /
+                                  match_dict[pattern.name]["cnt"])) /
+                             (match_dict[pattern.name]["cnt"] - 1)))
                     else:
                         match_dict[pattern.name]["std"] = 0
 
@@ -438,7 +468,7 @@ class Analyser(object):
 
         info_str = "      file \"{0}\" scanned pattern found:\n".format(
             os.path.basename(file_path))
-        info_str += jube2.util.text_table(
+        info_str += jube2.util.output.text_table(
             [(_name, ", ".join(["{0}:{1}".format(key, con)
                                 for key, con in value.items()]))
              for _name, value in match_dict.items()],

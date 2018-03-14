@@ -44,6 +44,8 @@
         <xs:attribute name="type" type="contentType" use="optional" />
         <xs:attribute name="mode" type="xs:string" use="optional" />
         <xs:attribute name="export" type="booleanType" use="optional" />
+        <xs:attribute name="update_mode" type="updateModeType"
+          use="optional" />
         <xs:attribute name="separator" type="xs:string"
           use="optional" />
         <xs:attribute name="tag" type="xs:string" use="optional" />
@@ -101,7 +103,10 @@
           use="optional" />
         <xs:attribute name="file_path_ref" type="xs:string"
           use="optional" />
-        <xs:attribute name="separator" type="xs:string" use="optional"/>  
+        <xs:attribute name="active" type="xs:string" use="optional" />
+        <xs:attribute name="source_dir" type="xs:string" use="optional" />
+        <xs:attribute name="target_dir" type="xs:string" use="optional" />
+        <xs:attribute name="separator" type="xs:string" use="optional"/>
         <xs:attribute name="tag" type="xs:string" use="optional" />
       </xs:extension>
     </xs:simpleContent>
@@ -112,6 +117,7 @@
       <xs:extension base="xs:string">
         <xs:attribute name="stdout" type="xs:string" use="optional" />
         <xs:attribute name="stderr" type="xs:string" use="optional" />
+        <xs:attribute name="active" type="xs:string" use="optional" />
         <xs:attribute name="work_dir" type="xs:string" use="optional" />
         <xs:attribute name="tag" type="xs:string" use="optional" />
       </xs:extension>
@@ -136,6 +142,7 @@
         <xs:attribute name="type" type="contentType" use="optional" />
         <xs:attribute name="mode" type="xs:string" use="optional" />
         <xs:attribute name="tag" type="xs:string" use="optional" />
+        <xs:attribute name="default" type="xs:string" use="optional" />
       </xs:extension>
     </xs:simpleContent> 
   </xs:complexType>
@@ -166,9 +173,12 @@
     <xs:attribute name="max_async" type="xs:string" use="optional" />
     <xs:attribute name="depend" type="xs:string" use="optional" />
     <xs:attribute name="work_dir" type="xs:string" use="optional" />
+    <xs:attribute name="active" type="xs:string" use="optional" />
+    <xs:attribute name="suffix" type="xs:string" use="optional" />
     <xs:attribute name="export" type="booleanType" use="optional" />
     <xs:attribute name="shared" type="xs:string" use="optional" />
     <xs:attribute name="tag" type="xs:string" use="optional" />
+    <xs:attribute name="cycles" type="xs:integer" use="optional" />
   </xs:complexType>
 
   <xs:complexType name="analyserType">
@@ -218,6 +228,7 @@
     <xs:attribute name="name" type="xs:string" use="required" />
     <xs:attribute name="style" type="styleType" use="optional" />
     <xs:attribute name="sort" type="xs:string" use="optional" />
+    <xs:attribute name="filter" type="xs:string" use="optional" />
     <xs:attribute name="separator" type="xs:string" use="optional" />
     <xs:attribute name="transpose" type="booleanType" use="optional" />
     <xs:attribute name="tag" type="xs:string" use="optional" />
@@ -234,6 +245,7 @@
     <xs:attribute name="port" type="xs:int" use="optional" />
     <xs:attribute name="format" type="xs:string" use="optional" />
     <xs:attribute name="sort" type="xs:string" use="optional" />
+    <xs:attribute name="filter" type="xs:string" use="optional" />
     <xs:attribute name="tag" type="xs:string" use="optional" />
   </xs:complexType>
 
@@ -242,7 +254,6 @@
       <xs:extension base="stringTagType">
         <xs:attribute name="format" type="xs:string" use="optional" />
         <xs:attribute name="title" type="xs:string" use="optional" />
-        <xs:attribute name="null_value" type="xs:string" use="optional" />
       </xs:extension> 
     </xs:complexContent>
   </xs:complexType>
@@ -274,8 +285,8 @@
   <xs:complexType name="doType">
     <xs:complexContent>
       <xs:extension base="stringTagType">
-        <xs:attribute name="done_file" type="xs:string"
-          use="optional" />
+        <xs:attribute name="done_file" type="xs:string" use="optional" />
+        <xs:attribute name="break_file" type="xs:string" use="optional" />
         <xs:attribute name="stdout" type="xs:string" use="optional" />
         <xs:attribute name="stderr" type="xs:string" use="optional" />
         <xs:attribute name="active" type="xs:string" use="optional" />
@@ -293,7 +304,17 @@
       <xs:enumeration value="False" />
     </xs:restriction>
   </xs:simpleType>
-  
+
+  <xs:simpleType name="updateModeType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="never" />
+      <xs:enumeration value="use" />
+      <xs:enumeration value="step" />
+      <xs:enumeration value="cycle" />
+      <xs:enumeration value="always" />
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="outmodeType">
     <xs:restriction base="xs:string">
       <xs:enumeration value="w" />

@@ -19,7 +19,7 @@ analyser_tag
         <use from="">...</use>
         ...
         <analyse step="...">
-          <file>...</file>
+          <file use="">...</file>
         </analyse>
         ...
       </analyser>
@@ -39,6 +39,14 @@ analyser_tag
    * the step-attribute contains an existing stepname
 
    * each file using each workpackage will be scanned seperatly
+
+   * the "use" argument inside the "<file>" tag is optional and can
+     be used to specify a file specific patternset;
+
+     * the global "<use>" and this local use will be combined and
+       evaluated at the same time
+
+     * a "from```subargument is not possible in this local ``use"
 
    * "reduce" is optional (default: "true" )
 
@@ -67,6 +75,18 @@ benchmark_tag
 
      * the path will be relative to input file location
 
+column_tag
+   A line within a ASCII result table. The <column>-tag can contain
+   the name of a pattern or the name of a parameter.
+
+      <column colw="..." format="..." title="...">...</column>
+
+   * "colw" is optional: column width
+
+   * "title" is optional: column title
+
+   * "format" can contain a C like format string: e.g. format=".2f"
+
 comment
    Add or manipulate the comment string.
 
@@ -88,20 +108,21 @@ continue
    be used. If benchmark directory is missing, current directory will
    be used.
 
-convert
-   Convert jube version 1 files to jube version 2 files.
-
 copy_tag
    A copy can be used to copy a file or directory from your normal
    filesytem to your sandbox work directory.
 
-      <copy directory="..." name="..." rel_path_ref="..." separator="...">...</copy>
+      <copy source_dir="..." target_dir="..." name="..." rel_path_ref="..." separator="..." active="...">...</copy>
 
-   * "directory" is optional, it can be used if you want to copy
-     several files inside the same directory
+   * "source_dir" is optional, will be used as a prefix for the
+     source filenames
+
+   * "target_dir" is optional, will be used as a prefix for the
+     target filenames
 
    * "name" is optional, it can be used to rename the file inside
-     your work directory
+     your work directory (will be ignored if you use shell extensions
+     in your pathname)
 
    * "rel_path_ref" is optional
 
@@ -112,6 +133,13 @@ copy_tag
      * "internal": rel.-pathes based on current work directory (e.g.
        to link files of another step)
 
+   * "active" is optional
+
+     * can be set to "true" or "false" or any *Python* parsable bool
+       expression to enable or disable the single command
+
+     * *parameter* are allowed inside this attribute
+
    * each copy-tag can contain a list of filenames (or directories),
      separated by ",", the default separator can be changed by using
      the "separator" attribute
@@ -121,7 +149,7 @@ copy_tag
    * you can copy all files inside a directory by using
      "directory/*"
 
-     * this can't be mixed using "name"
+     * this cannot be mixed using "name"
 
    * in the execution step the given files or directories will be
      copied
@@ -170,6 +198,7 @@ do_tag
 
       <do stdout="..." stderr="..." active="...">...</do>
       <do done_file="...">...</do>
+      <do break_file="...">...</do>
       <do shared="true">...</do>
       <do work_dir="...">...</do>
 
@@ -185,16 +214,22 @@ do_tag
 
    * "active" is optional
 
-     * can be set to "true" or "false" to enable or disable the
-       single command
+     * can be set to "true" or "false" or any *Python* parsable bool
+       expression to enable or disable the single command
 
      * *parameter* are allowed inside this attribute
 
    * "done_file"-filename is optional
 
-     * by using done_file the user can mark async-steps. The
+     * by using "done_file" the user can mark async-steps. The
        operation will stop until the script will create the named file
        inside the work directory.
+
+   * "break_file"-filename is optional
+
+     * by using "break_file" the user can stop further cycle runs.
+       the current step will be directly marked with finalized and
+       further "<do>" will be ignored.
 
    * "shared="true""
 
@@ -204,7 +239,7 @@ do_tag
 
      * cmd will run once (synchronize all workpackages)
 
-     * "$jube_wp_..." - parameter can't be used inside the shared
+     * "$jube_wp_..." - parameter cannot be used inside the shared
        command
 
 fileset_tag
@@ -247,31 +282,31 @@ general_structure
           ...
         </selection>
         <!-- global sets -->
-        <parameterset>...</parameterset>
-        <substitutionset>...</substitutionset>
-        <fileset>...</fileset>
-        <patternset>...</patternset>
+        <parameterset name="">...</parameterset>
+        <substitutionset name="">...</substitutionset>
+        <fileset name="">...</fileset>
+        <patternset name="">...</patternset>
         ...
-        <benchmark>
+        <benchmark name="" outpath="">
           <!-- optional benchmark comment -->
           <comment>...</comment>
           <!-- local benchmark parametersets -->
-          <parameterset>...</parameterset>
+          <parameterset name="">...</parameterset>
           ...
           <!-- files, which should be used -->
-          <fileset>...</fileset>
+          <fileset name="">...</fileset>
           ...
           <!-- substitution rules -->
-          <substituteset>...</substituteset>
+          <substituteset name="">...</substituteset>
           ...
           <!-- pattern -->
-          <patternset>...</patternset>
+          <patternset name="">...</patternset>
           ...
           <!-- commands -->
-          <step>...</step>
+          <step name="">...</step>
           ...
           <!-- analyse -->
-          <analyser>...</analyser>
+          <analyser name="">...</analyser>
           ...
           <!-- result -->
           <result>...</result>
@@ -353,7 +388,13 @@ jube_variables
 
      * "$jube_benchmark_id": current benchmark id
 
+     * "$jube_benchmark_padid": current benchmark id with preceding
+       zeros
+
      * "$jube_benchmark_home": original input file location
+
+     * "$jube_benchmark_rundir": main benchmark specific execution
+       directory
 
      * "$jube_benchmark_start": benchmark starting time
 
@@ -361,12 +402,16 @@ jube_variables
 
      * "$jube_step_name": current step name
 
-     * "$jube_step_iteratuions": number of step iterations (default:
+     * "$jube_step_iterations": number of step iterations (default:
        1)
+
+     * "$jube_step_cycles": number of step cycles (default: 1)
 
    * Workpackage:
 
      * "$jube_wp_id": current workpackage id
+
+     * "$jube_wp_padid": current workpackage id with preceding zeros
 
      * "$jube_wp_iteration": current iteration number (default: 0)
 
@@ -387,17 +432,33 @@ jube_variables
 
      * "$jube_wp_envlist": list of all exported parameter names
 
+     * "$jube_wp_cycle": id of current step cycle (starts at 0)
+
+key_tag
+   A syslog result key. "<key>" must contain an single parameter- or
+   patternname.
+
+      <key format="..." title="...">...</key>
+
+   * "title" is optional: alternative key title
+
+   * "format" can contain a C like format string: e.g. format=".2f"
+
 link_tag
    A link can be used to create a symbolic link from your sandbox work
    directory to a file or directory inside your normal filesystem.
 
-      <link directory="..." name="..." rel_path_ref="..." separator="...">...</link>
+      <link source_dir="..." target_dir="..." name="..." rel_path_ref="..." separator="..." active="...">...</link>
 
-   * "directory" is optional, it can be used if you want to link
-     several files inside the same directory
+   * "source_dir" is optional, will be used as a prefix for the
+     source filenames
+
+   * "target_dir" is optional, will be used as a prefix for the
+     target filenames
 
    * "name" is optional, it can be used to rename the file inside
-     your work directory
+     your work directory (will be ignored if you use shell extensions
+     in your pathname)
 
    * "rel_path_ref" is optional
 
@@ -407,6 +468,13 @@ link_tag
 
      * "internal": rel.-pathes based on current work directory (e.g.
        to link files of another step)
+
+   * "active" is optional
+
+     * can be set to "true" or "false" or any *Python* parsable bool
+       expression to enable or disable the single command
+
+     * *parameter* are allowed inside this attribute
 
    * each link-tag can contain a list of filenames (or directories),
      separated by ",", the default separator can be changed by using
@@ -443,7 +511,7 @@ parameter_tag
    environment (also called *parameter space*) for the different steps
    of the benchmark.
 
-      <parameter name="..." mode="..." type="..." separator="..." export="...">...</parameter>
+      <parameter name="..." mode="..." type="..." separator="..." export="..." update_mode="...">...</parameter>
 
    * a parameter can be seen as variable: Name is the name to use
      the variable, and the text between the tags will be the real
@@ -468,7 +536,7 @@ parameter_tag
      * inside the parameter definition, a parameter can be reused:
        "... $nameofparameter ..."
 
-     * the parameter will be replaced multiply times (to handle
+     * the parameter will be replaced multiple times (to handle
        complex parameter structures; max: 5 times)
 
      * the substitution will be run before the execution step starts
@@ -477,13 +545,35 @@ parameter_tag
 
    * Scripting modes allowed:
 
-     * "mode="python"": allow python snippets (using "eval <cmd>")
+     * "mode="python"": allow *Python* snippets (using "eval <cmd>")
 
-     * "mode="perl"": allow perl snippets (using "perl -e "print
+     * "mode="perl"": allow *Perl* snippets (using "perl -e "print
        <cmd>"")
+
+     * "mode="shell"": allow *Shell* snippets
 
    * Templates can be created, using scripting e.g.:
      "",".join([str(2**i) for i in range(3)])"
+
+   * "update_mode" is optional (default: "never")
+
+        * can be set to "never", "use", "step" and "cycle"
+
+        * depending on the setting the parameter will be
+          reevaluated:
+
+             * "never": no reevaluation, even if the parameterset is
+               used multiple times
+
+             * "use": reevaluation if the parameterset is explicitly
+               used
+
+             * "step": reevaluation in each new step
+
+             * "cycle": reevaluation in each cycle (number of
+               workpackages will stay unchanged)
+
+             * "always": reevaluation in each step and cycle
 
 parameterset_tag
    A parameterset is a container to store a bundle of *parameters*.
@@ -493,7 +583,7 @@ parameterset_tag
          ...
       </parameterset>
 
-   * parameterset-name must be unique (can't be reuse inside
+   * parameterset-name must be unique (cannot be reused inside
      substitutionsets or filesets)
 
    * "init_with" is optional
@@ -527,7 +617,7 @@ parameterset_tag
             <parameter name="test3">bar</parameter>
           </parameterset>
 
-     * These two sets aren't compatible:
+     * These two sets are not compatible:
 
           <parameterset name="set1">
             <parameter name="test">1,2,4</parameter>
@@ -542,7 +632,7 @@ pattern_tag
    A pattern is used to parse your output files and create your result
    data.
 
-      <pattern name="..." unit="..." mode="..." type="...">...</pattern>
+      <pattern name="..." default="..." unit="..." mode="..." type="...">...</pattern>
 
    * "unit" is optional, will be used in the result table
 
@@ -556,11 +646,16 @@ pattern_tag
 
      * "python": snippet evaluation (using *Python*)
 
+     * "shell": snippet evaluation (using *Shell*)
+
    * "type" is optional, specify datatype (for sort operation)
 
      * default: "string"
 
      * allowed: "int", "float" or "string"
+
+   * "default" is optional: Specify default value if pattern cannot
+     be found or if it cannot be evaluated
 
 patternset_tag
    A patternset is a container to store a bundle of patterns.
@@ -591,11 +686,11 @@ patternset_tag
 prepare_tag
    The prepare can contain any *Shell* command you want. It will be
    executed like a normal *<do>* inside the step where the
-   coresspoding fileset is used. The only difference towards the
+   corresponding fileset is used. The only difference towards the
    normal do is, that it will be executed **before** the substitution
    will be executed.
 
-      <prepare stdout="..." stderr="..." work_dir="...">...</prepare>
+      <prepare stdout="..." stderr="..." work_dir="..." active="...">...</prepare>
 
    * "stdout"- and "stderr"-filename are optional (default: "stdout"
      and "stderr")
@@ -603,6 +698,13 @@ prepare_tag
    * "work_dir" is optional, it can be used to change the work
      directory of this single command (relativly seen towards the
      original work directory)
+
+   * "active" is optional
+
+     * can be set to "true" or "false" or any *Python* parsable bool
+       expression to enable or disable the single command
+
+     * *parameter* are allowed inside this attribute
 
 remove
    The given benchmark will be removed.
@@ -668,7 +770,7 @@ selection_tag
    * "<only>" and "<not>" can contain a name list divided by ","
 
 statistical_values
-   If there are multiple pattern matches within oen file, multiple
+   If there are multiple pattern matches within one file, multiple
    files or when using multiple iterations. *JUBE* will create some
    statistical values automatically:
 
@@ -705,7 +807,8 @@ step_tag
    A step give a list of *Shell* operations and a corresponding
    parameter environment.
 
-      <step name="..." depend="..." work_dir="..." shared="..." export="..." max_async="..." iterations="...">
+      <step name="..." depend="..." work_dir="..." suffix="..." shared="..." active="..."
+            export="..." max_async="..." iterations="..." cycles="...">
         <use from="">...</use>
         ...
         <do></do>
@@ -745,6 +848,17 @@ step_tag
 
      * no automatic parent/children link creation
 
+   * "suffix" is optional and can contain a string (parameters are
+     allowed) which will be attached to the default workpackage
+     directory name
+
+   * "active" is optional
+
+     * can be set to "true" or "false" or any *Python* parsable bool
+       expression to enable or disable the single command
+
+     * *parameter* are allowed inside this attribute
+
    * "shared" is optional and can be used to create a shared folder
      which can be accessed by all workpackages based on this step
 
@@ -761,6 +875,9 @@ step_tag
 
    * "iterations" is optional. All workpackages within this step
      will be executed multiple times if the iterations value is used.
+
+   * "cycles" is optional. All "<do>" commands within the step will
+     be executed "cycles"-times
 
 sub_tag
    A substition expression.
@@ -799,14 +916,14 @@ substituteset_tag
 syslog_tag
    A syslog result type
 
-      <syslog name="..." address="..." host="..." port="..." sort="..." format="...">
-        <key format="..." title="..." null_value="...">...</key>
+      <syslog name="..." address="..." host="..." port="..." sort="..." format="..." filter="...">
+        <key>...</key>
         ...
       </syslog>
 
    * Syslog deamon can be given by a "host" and "port" combination
      (default "port": 541) or by a socket "address" e.g.: "/dev/log"
-     (mixing of host and address isn't allowed)
+     (mixing of host and address is not allowed)
 
    * "format" is optional: can contain a log format written in a
      pythonic way (default: "jube[%(process)s]: %(message)s")
@@ -817,18 +934,14 @@ syslog_tag
 
    * "<key>" must contain an single parameter- or patternname
 
-   * "title" is optional: alternative key title
-
-   * "format" can contain a C like format string: e.g. format=".2f"
-
-   * "null_value" is optional: NULL value representation (default:
-     empty string)
+   * "filter" is optional, it can contain a bool expression to show
+     only specific result entries
 
 table_tag
    A simple ASCII based table ouput.
 
-      <table name="..." style="..." sort="..." separator="..." transpose="...">
-        <column colw="..." format="..." title="..." null_value="...">...</column>
+      <table name="..." style="..." sort="..." separator="..." transpose="..." filter="...">
+        <column>...</column>
         ...
       </table>
 
@@ -843,16 +956,10 @@ table_tag
 
    * "<column>" must contain an single parameter- or patternname
 
-   * "colw" is optional: column width
-
-   * "title" is optional: column title
-
-   * "format" can contain a C like format string: e.g. format=".2f"
-
-   * "null_value" is optional: NULL value representation (default:
-     empty string)
-
    * "transpose" is optional (default: "false")
+
+   * "filter" is optional, it can contain a bool expression to show
+     only specific result entries
 
 tagging
    Tagging is a simple way to mark parts of your input file to be
@@ -869,18 +976,51 @@ tagging
 
         jube run <filename> --tag a b
 
-     * "<tags>" which doesn't contain one of these names will be
+     * "<tags>" which does not contain one of these names will be
        hidden inside the include file
 
-     * <tags> which doesn't contain any tag-attribute will stay
+     * <tags> which does not contain any tag-attribute will stay
        inside the include file
 
    * "not" tags are more important than normal tags: "tag="a,!b,c""
      and running with "a b" will hide the "<tag>" because the "!b" is
      more important than the "a"
 
+types
+   *Parameter* and *Pattern* allow a type specification. This type is
+   either used for sorting within the result table and is also used to
+   validate the parameter content. The types are not used to convert
+   parameter values, e.g. a floating value will stay unchanged when
+   used in any other context even if the type int was specified.
+
+   allowed types are:
+
+   * "string" (this is also the default type)
+
+   * "int"
+
+   * "float"
+
 update
    Check if a newer JUBE version is available.
+
+update_mode
+   The update mode is parameter attribute which can be used to control
+   the reevaluation of the parameter content.
+
+   These update modes are available:
+
+      * "never": no reevaluation, even if the parameterset is used
+        multiple times
+
+      * "use": reevaluation if the parameterset is explicitly used
+
+      * "step": reevaluation in each new step
+
+      * "cycle": reevaluation in each cycle (number of workpackages
+        will stay unchanged)
+
+      * "always": reevaluation in each step and cycle
 
 workpackage
    A workpackage is the combination of a *step* (which contains all

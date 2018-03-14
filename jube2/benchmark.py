@@ -1,5 +1,5 @@
 # JUBE Benchmarking Environment
-# Copyright (C) 2008-2015
+# Copyright (C) 2008-2017
 # Forschungszentrum Juelich GmbH, Juelich Supercomputing Centre
 # http://www.fz-juelich.de/jsc/jube
 #
@@ -29,7 +29,8 @@ import pprint
 import shutil
 import itertools
 import jube2.parameter
-import jube2.util
+import jube2.util.util
+import jube2.util.output
 import jube2.conf
 import jube2.log
 
@@ -58,7 +59,7 @@ class Benchmark(object):
         for result in self._results.values():
             result.benchmark = self
         self._workpackages = dict()
-        self._work_stat = jube2.util.WorkStat()
+        self._work_stat = jube2.util.util.WorkStat()
         self._comment = comment
         self._id = -1
         self._file_path_ref = file_path_ref
@@ -132,6 +133,14 @@ class Benchmark(object):
         """Return workpackages"""
         return self._workpackages
 
+    def workpackage_by_id(self, wp_id):
+        """Search and return a benchmark workpackage by its wp_id"""
+        for stepname in self._workpackages:
+            for workpackage in self._workpackages[stepname]:
+                if workpackage.id == wp_id:
+                    return workpackage
+        return None
+
     @property
     def work_stat(self):
         """Return work queue"""
@@ -160,11 +169,14 @@ class Benchmark(object):
             result_dict[stepname] = {"all": 0,
                                      "open": 0,
                                      "wait": 0,
+                                     "error": 0,
                                      "done": 0}
             for workpackage in self._workpackages[stepname]:
                 result_dict[stepname]["all"] += 1
                 if workpackage.done:
                     result_dict[stepname]["done"] += 1
+                elif workpackage.error:
+                    result_dict[stepname]["error"] += 1
                 elif workpackage.started:
                     result_dict[stepname]["wait"] += 1
                 else:
@@ -177,12 +189,14 @@ class Benchmark(object):
         result_dict = {"all": 0,
                        "open": 0,
                        "wait": 0,
+                       "error": 0,
                        "done": 0}
 
         for status in self.workpackage_status.values():
             result_dict["all"] += status["all"]
             result_dict["open"] += status["open"]
             result_dict["wait"] += status["wait"]
+            result_dict["error"] += status["error"]
             result_dict["done"] += status["done"]
 
         return result_dict
@@ -204,26 +218,47 @@ class Benchmark(object):
         # benchmark id
         parameterset.add_parameter(
             jube2.parameter.Parameter.
-            create_parameter("jube_benchmark_id",
-                             str(self._id), parameter_type="int"))
+            create_parameter(
+                "jube_benchmark_id", str(self._id), parameter_type="int",
+                update_mode=jube2.parameter.JUBE_MODE))
+
+        # benchmark id with padding
+        parameterset.add_parameter(
+            jube2.parameter.Parameter.
+            create_parameter("jube_benchmark_padid",
+                             jube2.util.util.id_dir("", self._id),
+                             parameter_type="string",
+                             update_mode=jube2.parameter.JUBE_MODE))
+
         # benchmark name
         parameterset.add_parameter(
             jube2.parameter.Parameter.
-            create_parameter("jube_benchmark_name", self._name))
+            create_parameter("jube_benchmark_name", self._name,
+                             update_mode=jube2.parameter.JUBE_MODE))
 
         # benchmark home
         parameterset.add_parameter(
             jube2.parameter.Parameter.
             create_parameter("jube_benchmark_home",
-                             os.path.abspath(self._file_path_ref)))
+                             os.path.abspath(self._file_path_ref),
+                             update_mode=jube2.parameter.JUBE_MODE))
 
-        timestamps = jube2.util.read_timestamps(
+        # benchmark rundir
+        parameterset.add_parameter(
+            jube2.parameter.Parameter.
+            create_parameter("jube_benchmark_rundir",
+                             os.path.abspath(self.bench_dir),
+                             update_mode=jube2.parameter.JUBE_MODE))
+
+        timestamps = jube2.util.util.read_timestamps(
             os.path.join(self.bench_dir, jube2.conf.TIMESTAMPS_INFO))
 
         # benchmark start
         parameterset.add_parameter(
             jube2.parameter.Parameter.create_parameter(
-                "jube_benchmark_start", timestamps.get("start", "")))
+                "jube_benchmark_start",
+                timestamps.get("start", "").replace(" ", "T"),
+                update_mode=jube2.parameter.JUBE_MODE))
 
         return parameterset
 
@@ -269,7 +304,7 @@ class Benchmark(object):
         """Create initial workpackages of current benchmark and create graph
         structure."""
         self._workpackages = dict()
-        self._work_stat = jube2.util.WorkStat()
+        self._work_stat = jube2.util.util.WorkStat()
 
         # Create workpackage storage
         for step_name in self._steps:
@@ -317,7 +352,7 @@ class Benchmark(object):
                     result_dir = result.result_dir
                     result_dir = os.path.expanduser(result_dir)
                     result_dir = os.path.expandvars(result_dir)
-                    result_dir = jube2.util.id_dir(
+                    result_dir = jube2.util.util.id_dir(
                         os.path.join(self.file_path_ref, result_dir), self.id)
                 if (not os.path.exists(result_dir)) and \
                    (not jube2.conf.DEBUG_MODE):
@@ -368,7 +403,8 @@ class Benchmark(object):
                     (os.access(self.bench_dir, os.W_OK))):
                 self.write_benchmark_configuration(
                     os.path.join(self.bench_dir,
-                                 jube2.conf.CONFIGURATION_FILENAME))
+                                 jube2.conf.CONFIGURATION_FILENAME),
+                    outpath="..")
 
     def write_analyse_data(self, filename):
         """All analyse data will be written to given file
@@ -380,7 +416,8 @@ class Benchmark(object):
             analyser_etree.attrib["name"] = analyser_name
             for etree in self._analyser[analyser_name].analyse_etree_repr():
                 analyser_etree.append(etree)
-        xml = jube2.util.element_tree_tostring(analyse_etree, encoding="UTF-8")
+        xml = jube2.util.output.element_tree_tostring(
+            analyse_etree, encoding="UTF-8")
         # Using dom for pretty-print
         dom = DOM.parseString(xml.encode("UTF-8"))
         fout = open(filename, "wb")
@@ -409,26 +446,31 @@ class Benchmark(object):
                 if (step_name in self._workpackages) and
                    (step_name != workpackage.step.name)]
             parent_workpackages.append([workpackage])
+
             # Create all possible parent combinations
             workpackage_combinations = \
                 [iterator for iterator in
                  itertools.product(*parent_workpackages)]
+            possible_combination = len(workpackage_combinations)
             for workpackage_combination in workpackage_combinations:
                 new_workpackages = self._create_new_workpackages_with_parents(
                     dependent_step, workpackage_combination)
-                # Create links
+                if len(new_workpackages) > 0:
+                    possible_combination -= 1
+
+                # Create links: parent workpackages -> new children
                 for new_workpackage in new_workpackages:
                     for parent in workpackage_combination:
-                        new_workpackage.add_parent(parent)
                         parent.add_children(new_workpackage)
+
                 self._workpackages[dependent_step.name] += new_workpackages
                 all_new_workpackages += new_workpackages
+            if possible_combination > 0:
+                LOGGER.debug(("  {0} workpackages combinations were skipped"
+                              " while checking possible parent combinations"
+                              " for step {1}").format(possible_combination,
+                                                      dependent_step.name))
 
-        # Store workpackage information
-        if len(all_new_workpackages) > 0:
-            self.write_workpackage_information(
-                os.path.join(self.bench_dir,
-                             jube2.conf.WORKPACKAGES_FILENAME))
         LOGGER.debug("  {0} new workpackages created".format(
             len(all_new_workpackages)))
         return all_new_workpackages
@@ -439,21 +481,17 @@ class Benchmark(object):
         if parent_workpackages is None:
             parent_workpackages = list()
         # Combine and check parent parametersets
-        history_parameterset = jube2.parameter.Parameterset()
-        compatible = True
+        parameterset = jube2.parameter.Parameterset()
+        incompatible_parameter_names = set()
         for parent_workpackage in parent_workpackages:
-            # Check weather parameter combination is possible
-            compatible = history_parameterset.is_compatible(
-                parent_workpackage.history)
-            if compatible:
-                history_parameterset.add_parameterset(
-                    parent_workpackage.history)
-            else:
-                break
-
-        # Only compatible parameter combination allowed
-        if not compatible:
-            return list()
+            # Check weather parameter combination is possible or not.
+            # JUBE Parameter can be ignored
+            incompatible_parameter_names = incompatible_parameter_names.union(
+                parameterset.get_incompatible_parameter(
+                    parent_workpackage.parameterset,
+                    update_mode=jube2.parameter.JUBE_MODE))
+            parameterset.add_parameterset(
+                parent_workpackage.parameterset)
 
         # Sort parent workpackges after total iteration number and name
         sorted_parents = list(parent_workpackages)
@@ -468,21 +506,24 @@ class Benchmark(object):
                 iteration_base = \
                     parent.step.iterations * iteration_base + parent.iteration
 
-        # Create empty local parameterset
-        local_parameterset = jube2.parameter.Parameterset()
+        parameterset.remove_jube_parameter()
 
         # Create new workpackages
         new_workpackages = step.create_workpackages(
-            self, local_parameterset, history_parameterset,
-            iteration_base=iteration_base)
+            self, parameterset,
+            iteration_base=iteration_base,
+            parents=parent_workpackages,
+            incompatible_parameters=incompatible_parameter_names)
 
-        if len(parent_workpackages) > 0:
+        # Update iteration sibling connections
+        if len(parent_workpackages) > 0 and len(new_workpackages) > 0:
             for sibling in parent_workpackages[0].iteration_siblings:
                 if sibling != parent_workpackages[0]:
                     for child in sibling.children:
                         for workpackage in new_workpackages:
-                            if workpackage.history.is_compatible(
-                                    child.history):
+                            if workpackage.parameterset.is_compatible(
+                                    child.parameterset,
+                                    update_mode=jube2.parameter.JUBE_MODE):
                                 workpackage.iteration_siblings.add(child)
                                 child.iteration_siblings.add(workpackage)
 
@@ -491,9 +532,11 @@ class Benchmark(object):
     def new_run(self):
         """Create workpackage structure and run benchmark"""
         # Check benchmark consistency
-        jube2.util.consistency_check(self)
+        LOGGER.debug("Start consistency check")
+        jube2.util.util.consistency_check(self)
 
         # Create benchmark directory
+        LOGGER.debug("Create benchmark directory")
         self._create_bench_dir()
 
         # Change logfile
@@ -504,12 +547,15 @@ class Benchmark(object):
         jube2.workpackage.Workpackage.id_counter = 0
 
         # Create initial workpackages
+        LOGGER.debug("Create initial workpackages")
         self._create_initial_workpackages()
 
         # Store workpackage information
+        LOGGER.debug("Store initial workpackage information")
         self.write_workpackage_information(
             os.path.join(self.bench_dir, jube2.conf.WORKPACKAGES_FILENAME))
 
+        LOGGER.debug("Start benchmark run")
         self.run()
 
     def run(self):
@@ -518,25 +564,20 @@ class Benchmark(object):
         if jube2.conf.DEBUG_MODE:
             title += " ---DEBUG_MODE---"
         title += "\n\n{0}".format(self._comment)
-        infostr = jube2.util.text_boxed(title)
+        infostr = jube2.util.output.text_boxed(title)
         LOGGER.info(infostr)
 
         if not jube2.conf.HIDE_ANIMATIONS:
-            print("\nRunning workpackages (#=done, 0=wait):")
+            print("\nRunning workpackages (#=done, 0=wait, E=error):")
             status = self.benchmark_status
-            jube2.util.print_loading_bar(status["done"], status["all"],
-                                         status["wait"])
+            jube2.util.output.print_loading_bar(
+                status["done"], status["all"], status["wait"], status["error"])
 
         # Handle all workpackages in given order
         while not self._work_stat.empty():
             workpackage = self._work_stat.get()
             if not workpackage.done:
                 workpackage.run()
-                if workpackage.done:
-                    # Store workpackage information
-                    self.write_workpackage_information(
-                        os.path.join(self.bench_dir,
-                                     jube2.conf.WORKPACKAGES_FILENAME))
             self._create_new_workpackages_for_workpackage(workpackage)
 
             # Update queues (move waiting workpackages to work queue
@@ -545,8 +586,9 @@ class Benchmark(object):
 
             if not jube2.conf.HIDE_ANIMATIONS:
                 status = self.benchmark_status
-                jube2.util.print_loading_bar(status["done"], status["all"],
-                                             status["wait"])
+                jube2.util.output.print_loading_bar(
+                    status["done"], status["all"], status["wait"],
+                    status["error"])
             workpackage.queued = False
 
             for mode in ("only_started", "all"):
@@ -559,25 +601,26 @@ class Benchmark(object):
                            (mode == "all" and (not child.queued)):
                             child.queued = True
                             self._work_stat.put(child)
+        # Store workpackage information
+        self.write_workpackage_information(
+            os.path.join(self.bench_dir, jube2.conf.WORKPACKAGES_FILENAME))
+
         print("\n")
 
-        status_data = [("stepname", "all", "open", "wait", "done")]
+        status_data = [("stepname", "all", "open", "wait", "error", "done")]
         status_data += [(stepname, str(_status["all"]), str(_status["open"]),
-                         str(_status["wait"]), str(_status["done"]))
+                         str(_status["wait"]), str(_status["error"]),
+                         str(_status["done"]))
                         for stepname, _status in
                         self.workpackage_status.items()]
-        LOGGER.info(jube2.util.text_table(status_data, use_header_line=True,
-                                          indent=2))
+        LOGGER.info(jube2.util.output.text_table(
+            status_data, use_header_line=True, indent=2))
 
         LOGGER.info("\n>>>> Benchmark information and " +
                     "further useful commands:")
         LOGGER.info(">>>>       id: {0}".format(self._id))
         LOGGER.info(">>>>   handle: {0}".format(self._outpath))
         LOGGER.info(">>>>      dir: {0}".format(self.bench_dir))
-
-        # Store workpackage information
-        self.write_workpackage_information(
-            os.path.join(self.bench_dir, jube2.conf.WORKPACKAGES_FILENAME))
 
         status = self.benchmark_status
         if status["all"] != status["done"]:
@@ -591,12 +634,12 @@ class Benchmark(object):
                      "--id {1}").format(self._outpath, self._id))
         LOGGER.info((">>>>      log: jube log {0} " +
                      "--id {1}").format(self._outpath, self._id))
-        LOGGER.info(jube2.util.text_line() + "\n")
+        LOGGER.info(jube2.util.output.text_line() + "\n")
 
     def _create_bench_dir(self):
         """Create the directory for a benchmark."""
         # Get group_id if available (given by JUBE_GROUP_NAME)
-        group_id = jube2.util.check_and_get_group_id()
+        group_id = jube2.util.util.check_and_get_group_id()
         # Check if outpath exists
         if not (os.path.exists(self._outpath) and
                 os.path.isdir(self._outpath)):
@@ -605,24 +648,24 @@ class Benchmark(object):
                 os.chown(self._outpath, os.getuid(), group_id)
         # Generate unique ID in outpath
         if self._id < 0:
-            self._id = jube2.util.get_current_id(self._outpath) + 1
+            self._id = jube2.util.util.get_current_id(self._outpath) + 1
         if os.path.exists(self.bench_dir):
-            raise RuntimeError("Benchmark directory \"{0}\" already exist"
+            raise RuntimeError("Benchmark directory \"{0}\" already exists"
                                .format(self.bench_dir))
 
         os.makedirs(self.bench_dir)
         # If JUBE_GROUP_NAME is given, set GID-Bit and change group
         if group_id is not None:
+            os.chown(self.bench_dir, os.getuid(), group_id)
             os.chmod(self.bench_dir,
                      os.stat(self.bench_dir).st_mode | stat.S_ISGID)
-            os.chown(self.bench_dir, os.getuid(), group_id)
         self.write_benchmark_configuration(
-            os.path.join(self.bench_dir, jube2.conf.CONFIGURATION_FILENAME))
-        jube2.util.update_timestamps(os.path.join(self.bench_dir,
-                                                  jube2.conf.TIMESTAMPS_INFO),
-                                     "start", "change")
+            os.path.join(self.bench_dir, jube2.conf.CONFIGURATION_FILENAME),
+            outpath="..")
+        jube2.util.util.update_timestamps(os.path.join(
+            self.bench_dir, jube2.conf.TIMESTAMPS_INFO), "start", "change")
 
-    def write_benchmark_configuration(self, filename):
+    def write_benchmark_configuration(self, filename, outpath=None):
         """The current benchmark configuration will be written to given file
         using xml representation"""
         # Create root-tag and append single benchmark
@@ -636,9 +679,13 @@ class Benchmark(object):
                 tag_etree = ET.SubElement(selection_etree, "tag")
                 tag_etree.text = tag
 
-        benchmarks_etree.append(self.etree_repr(new_cwd=self.bench_dir))
-        xml = jube2.util.element_tree_tostring(benchmarks_etree,
-                                               encoding="UTF-8")
+        benchmark_etree = self.etree_repr(new_cwd=self.bench_dir)
+        if outpath is not None:
+            benchmark_etree.attrib["outpath"] = outpath
+
+        benchmarks_etree.append(benchmark_etree)
+        xml = jube2.util.output.element_tree_tostring(
+            benchmarks_etree, encoding="UTF-8")
         # Using dom for pretty-print
         dom = DOM.parseString(xml.encode('UTF-8'))
         fout = open(filename, "wb")
@@ -659,8 +706,8 @@ class Benchmark(object):
         for workpackages in self._workpackages.values():
             for workpackage in workpackages:
                 workpackages_etree.append(workpackage.etree_repr())
-        xml = jube2.util.element_tree_tostring(workpackages_etree,
-                                               encoding="UTF-8")
+        xml = jube2.util.output.element_tree_tostring(
+            workpackages_etree, encoding="UTF-8")
         # Using dom for pretty-print
         dom = DOM.parseString(xml.encode("UTF-8"))
         fout = open(filename, "wb")
@@ -675,4 +722,4 @@ class Benchmark(object):
     @property
     def bench_dir(self):
         """Return benchmark directory"""
-        return jube2.util.id_dir(self._outpath, self._id)
+        return jube2.util.util.id_dir(self._outpath, self._id)
