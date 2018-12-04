@@ -1,3 +1,10 @@
+jube (2.2.1-0sci9u1) scibian9; urgency=medium
+
+  * Adapt rules file to new Jube version
+  * New upstream version 2.2.1
+
+ -- Pierre Trespeuch <pierre-externe.trespeuch@edf.fr>  Tue, 04 Dec 2018 10:40:47 +0100
+
 jube (2.2.0-0sci9u1) scibian9; urgency=medium
 
   * Rebuild for Scibian 9
