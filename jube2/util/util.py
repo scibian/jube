@@ -1,5 +1,5 @@
 # JUBE Benchmarking Environment
-# Copyright (C) 2008-2017
+# Copyright (C) 2008-2018
 # Forschungszentrum Juelich GmbH, Juelich Supercomputing Centre
 # http://www.fz-juelich.de/jsc/jube
 #
@@ -177,6 +177,7 @@ def script_evaluation(cmd, script_type):
         sub = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, shell=True)
         stdout, stderr = sub.communicate()
+        stdout = stdout.decode(errors="ignore")
         # Check command execution error code
         errorcode = sub.wait()
         if errorcode != 0:

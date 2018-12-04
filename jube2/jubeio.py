@@ -1,5 +1,5 @@
 # JUBE Benchmarking Environment
-# Copyright (C) 2008-2017
+# Copyright (C) 2008-2018
 # Forschungszentrum Juelich GmbH, Juelich Supercomputing Centre
 # http://www.fz-juelich.de/jsc/jube
 #
@@ -1227,6 +1227,8 @@ class XMLParser(object):
             selection_etree = param.find("selection")
             if selection_etree is not None:
                 selected_value = selection_etree.text
+                if selected_value is None:
+                    selected_value = ""
                 idx = int(selection_etree.get("idx", "-1"))
             else:
                 selected_value = param.get("selection")
