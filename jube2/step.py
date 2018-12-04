@@ -1,5 +1,5 @@
 # JUBE Benchmarking Environment
-# Copyright (C) 2008-2017
+# Copyright (C) 2008-2018
 # Forschungszentrum Juelich GmbH, Juelich Supercomputing Centre
 # http://www.fz-juelich.de/jsc/jube
 #
@@ -548,11 +548,11 @@ class Operation(object):
                         if (not read_out):
                             break
                         else:
+                            print(read_out.decode(errors="ignore"), end="")
                             try:
-                                print(read_out.decode(), end="")
-                            except UnicodeDecodeError:
-                                pass
-                            stdout.write(read_out)
+                                stdout.write(read_out)
+                            except TypeError:
+                                stdout.write(read_out.decode(errors="ignore"))
                             time.sleep(jube2.conf.VERBOSE_STDOUT_POLL_SLEEP)
                     sub.communicate()
 
