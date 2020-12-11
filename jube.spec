@@ -10,7 +10,7 @@
 Summary: JUBE Benchmarking Environment
 Name: %{name}
 Version: %{version}
-Release:  1%{?dist}.edf
+Release:  2%{?dist}.edf
 Source0: %{name}-%{unmangled_version}.tar.gz
 License: GPLv3
 Group: Application/System
@@ -70,6 +70,14 @@ install -m 644 docs/JUBE.pdf %{buildroot}/docs/
 %clean
 rm -rf %{buildroot}
 
+%post
+eval "$(jube complete)"
+jube complete > /etc/bash_completion.d/jube
+chmod 644 /etc/bash_completion.d/jube
+
+%postun
+rm /etc/bash_completion.d/jube
+
 ##################
 # Files Sections #
 ##################
@@ -86,5 +94,8 @@ rm -rf %{buildroot}
 /usr/share/jube
 
 %changelog
-* Fri Oct 09 2020 Romaric Kanyamibwa <romaric-externe.kanyamibwa@edf.fr> 1.0.2-1el8.edf
+* Fri Dec 11 2020 Romaric Kanyamibwa <romaric-externe.kanyamibwa@edf.fr> 2.2.1-2el8.edf
+- Add autocompletion
+
+* Fri Oct 09 2020 Romaric Kanyamibwa <romaric-externe.kanyamibwa@edf.fr> 2.2.1-1el8.edf
 - Initial RPM release
